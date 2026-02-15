@@ -1,111 +1,110 @@
-# 技術記事配信システム
+# 技術記事配信用リポジトリ
 
-技術記事の最新情報を自動取得してLINEで配信するシステムです。
+GitHub Actions経由で技術記事を自動収集し、LINE Messaging APIでブロードキャスト配信するシステム。
 
 ## 機能
 
-- Qiita, Zenn, GitHub Trendingから最新の技術記事を自動取得
-- 毎日決まった時間にLINEで配信
-- GitHub Actionsによる自動実行
-- ローカル実行にも対応
+- **記事収集**: Qiita、Zenn、TechFeedから人気記事を取得
+- **自動実行**: GitHub Actionsで毎日8時（JST）に自動実行
+- **LINE配信**: LINE Messaging APIでブロードキャスト配信
 
 ## セットアップ
 
-### 1. LINE Messaging API の設定
+### 1. LINE Messaging APIの設定
 
-1. [LINE Developers](https://developers.line.biz/)にアクセス
-2. 新しいプロバイダーを作成（または既存のものを選択）
-3. Messaging APIチャネルを作成
-4. チャネル設定から以下を取得:
-   - `Channel Access Token` (長期トークンを発行)
-   - `User ID` (LINE公式アカウントと友だちになり、ユーザーIDを確認)
+1. [LINE Developers](https://developers.line.biz/console/) にアクセス
+2. 新規プロバイダーとMessaging APIチャネルを作成
+3. チャネルアクセストークン（長期）を発行
+4. トークンをコピーして保存
 
-### 2. GitHub Secrets の設定
+### 2. GitHub Secretsの設定
 
-リポジトリの Settings > Secrets and variables > Actions から以下を追加:
+1. GitHubリポジトリの **Settings** → **Secrets and variables** → **Actions**
+2. **New repository secret** をクリック
+3. 以下のシークレットを追加：
+   - Name: `CHANNEL_ACCESS_TOKEN`
+   - Value: LINE Messaging APIのチャネルアクセストークン
 
-- `LINE_CHANNEL_ACCESS_TOKEN`: LINE Messaging APIのアクセストークン
-- `LINE_USER_ID`: 配信先のLINE User ID
+### 3. ローカル実行（オプション）
 
-### 3. ローカル実行の場合
+ローカルでテストする場合：
 
-#### 環境変数の設定
+1. 依存関係をインストール：
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-`.env`ファイルを作成:
+2. `.env` ファイルを作成：
+   ```
+   CHANNEL_ACCESS_TOKEN=your_line_channel_access_token
+   ```
 
-```bash
-LINE_CHANNEL_ACCESS_TOKEN=your_channel_access_token
-LINE_USER_ID=your_user_id
-```
-
-#### 依存関係のインストール
-
-```bash
-pip install -r requirements.txt
-```
-
-#### 実行
-
-```bash
-python main.py
-```
+3. 実行：
+   ```bash
+   python main.py
+   ```
 
 ## 動作仕様
 
 ### 実行スケジュール
+- **自動実行**: 毎日8時（JST）
+- **手動実行**: GitHub Actionsの「Run workflow」ボタンから
+- **プッシュ時**: mainブランチへのpush時（テスト用）
 
-- GitHub Actions: 毎日 21:00 (JST) に自動実行
-- 手動実行: GitHub Actionsの "Run workflow" から実行可能
+### 記事取得
+- **Qiita**: Webスクレイピング（BeautifulSoup）
+- **Zenn**: 公開API
+- **TechFeed**: RSSフィード
 
-### 取得する記事
+各サービスから上位5件の記事を取得し、LINEで配信します。
 
-1. **Qiita**: デイリートレンド上位5件
-2. **Zenn**: トレンド記事上位5件
-3. **GitHub Trending**: 日次トレンドリポジトリ上位5件
-
-### 配信方法
-
-LINE Messaging APIを使用してプッシュメッセージで配信します。
-各記事は以下の形式で送信されます:
-
-```
-【Qiita】
-1. 記事タイトル
-   URL
-2. 記事タイトル
-   URL
-...
-```
+### LINE配信方式
+- **ブロードキャスト**: 公式アカウントの全フォロワーに配信
+- **メッセージ形式**: テキストメッセージ（最大5000文字）
 
 ## トラブルシューティング
 
-### LINE配信が届かない
+### GitHub Actionsが実行されない
 
-1. `LINE_CHANNEL_ACCESS_TOKEN`が正しく設定されているか確認
-2. `LINE_USER_ID`が正しく設定されているか確認
-3. LINE公式アカウントとブロックしていないか確認
-4. GitHub Actionsのログでエラーメッセージを確認
+1. **Actionsタブ**でワークフローの実行履歴を確認
+2. cron設定を確認（`.github/workflows/daily_tech_digest.yml`）
+3. 手動実行で動作確認
+
+### LINE配信が失敗する
+
+1. `CHANNEL_ACCESS_TOKEN` が正しく設定されているか確認
+2. LINEチャネルが有効化されているか確認
+3. GitHub Actionsのログでエラー内容を確認
 
 ### 記事が取得できない
 
-1. インターネット接続を確認
-2. 各サイトのHTMLフォーマットが変更されていないか確認
-3. `requirements.txt`の依存関係が正しくインストールされているか確認
+- 各サービスのHTML構造が変更された可能性
+- エラーログを確認してスクレイパーを更新
 
-### GitHub Actionsが実行されない
+### よくあるエラー
 
-1. リポジトリの Actions が有効になっているか確認
-2. `.github/workflows/daily-news.yml`が正しく配置されているか確認
-3. cron設定が正しいか確認（UTC時刻で設定されています）
+**`CHANNEL_ACCESS_TOKEN が設定されていません`**
+- GitHub Secretsに `CHANNEL_ACCESS_TOKEN` を追加
+
+**`LINE送信エラー`**
+- トークンが正しいか確認
+- LINEチャネルの設定を確認
+
+## ログ確認
+
+GitHub Actionsのログ：
+1. リポジトリの **Actions** タブ
+2. 該当のワークフロー実行をクリック
+3. **Run daily digest** ステップで詳細ログを確認
 
 ## 技術スタック
 
-- Python 3.9+
-- beautifulsoup4: Webスクレイピング
-- requests: HTTP通信
-- python-dotenv: 環境変数管理
-- LINE Messaging API: メッセージ配信
-- GitHub Actions: 自動実行
+- **Python 3.11**
+- **BeautifulSoup4**: Qiitaスクレイピング
+- **requests**: HTTP通信
+- **feedparser**: TechFeed RSS解析
+- **line-bot-sdk**: LINE Messaging API
+- **GitHub Actions**: 自動実行
 
 ## ライセンス
 
