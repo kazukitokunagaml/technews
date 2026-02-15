@@ -1,11 +1,10 @@
 import datetime
-import http.client
-import json
 import logging
-import os
 import sys
+import time
 
-from dotenv import load_dotenv
+import requests
+from bs4 import BeautifulSoup
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -15,64 +14,106 @@ logging.basicConfig(
 
 
 class QiitaScraper:
-    """Qiitaから昨日の人気記事を取得するスクレイパー"""
+    """Qiitaから昨日の人気記事を取得するスクレイパー（Webスクレイピング版）"""
 
-    def __init__(self, tag_name="LLM", top_n=5, total_page=5, per_page=100):
-        load_dotenv()
-        self.api_token = os.getenv("QIITA_API_TOKEN")
-        if not self.api_token:
-            raise ValueError("QIITA_API_TOKEN not found in environment variables.")
-        self.tag_name = tag_name
+    BASE_URL = "https://qiita.com"
+
+    def __init__(self, top_n=5, max_pages=3):
         self.top_n = top_n
-        self.total_page = total_page
-        self.per_page = per_page
-        self.connect = http.client.HTTPSConnection("qiita.com")
-        self.url = "/api/v2/items?"
-        self.headers = {"Authorization": f"Bearer {self.api_token}"}
+        self.max_pages = max_pages
+        self.session = requests.Session()
+        self.session.headers.update({
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        })
 
         yesterday = datetime.date.today() - datetime.timedelta(days=1)
         self.yesterday_str = yesterday.strftime("%Y-%m-%d")
         logging.info(f"Qiita 対象日: {self.yesterday_str}")
 
-    def fetch_data(self, page):
-        query = f"&query=created%3A{self.yesterday_str}"
-        page_params = f"page={page}&per_page={self.per_page}"
-        url = f"{self.url}{page_params}{query}"
+    def fetch_articles(self, page=1):
+        """Qiitaの記事一覧ページから記事情報を取得"""
+        url = f"{self.BASE_URL}/items?page={page}"
         logging.info(f"Qiita Fetching: {url}")
+
         try:
-            self.connect.request("GET", url, headers=self.headers)
-            res = self.connect.getresponse()
-            if res.status != 200:
-                logging.error(f"Qiita API failed: {res.status} {res.reason}")
-                return []
-            data = res.read().decode("utf-8")
-            items = json.loads(data)
-            results = []
-            for item in items:
-                created = item.get("created_at", "").split("T")[0]
-                if created == self.yesterday_str:
-                    results.append({
-                        "title": item["title"],
-                        "url": item["url"],
-                        "likes_count": item.get("likes_count", 0),
+            response = self.session.get(url, timeout=30)
+            response.raise_for_status()
+
+            soup = BeautifulSoup(response.content, "html.parser")
+            articles = []
+            seen_urls = set()
+
+            # 記事タイトルのリンクを探す
+            # class="style-2vm86z" のリンクが記事タイトルのリンク
+            article_links = soup.find_all("a", class_="style-2vm86z", href=True)
+
+            for link in article_links:
+                try:
+                    href = link["href"]
+                    # 絶対URLに変換
+                    if not href.startswith("http"):
+                        href = f"{self.BASE_URL}{href}"
+
+                    # 重複チェック
+                    if href in seen_urls:
+                        continue
+                    seen_urls.add(href)
+
+                    title = link.get_text(strip=True)
+                    if not title:
+                        continue
+
+                    # いいね数を抽出（オプション）
+                    # 記事カード内のLIKEボタンを探す
+                    likes = 0
+                    parent = link.find_parent("article") or link.find_parent("div")
+                    if parent:
+                        like_elem = parent.find("span", attrs={"data-hyperlink": "LikeButton"})
+                        if like_elem:
+                            likes_text = like_elem.get_text(strip=True)
+                            try:
+                                likes = int(likes_text)
+                            except (ValueError, TypeError):
+                                likes = 0
+
+                    articles.append({
+                        "title": title,
+                        "url": href,
+                        "likes_count": likes,
                     })
-            return results
-        except Exception as e:
+
+                except Exception as e:
+                    logging.warning(f"Qiita 記事パースエラー: {e}")
+                    continue
+
+            return articles
+
+        except requests.RequestException as e:
             logging.error(f"Qiita fetch error: {e}")
+            return []
+        except Exception as e:
+            logging.error(f"Qiita parse error: {e}")
             return []
 
     def run(self):
-        logging.info(f"Qiita: 昨日の人気記事を取得中...")
+        """昨日の人気記事を取得"""
+        logging.info(f"Qiita: 記事を取得中...")
         all_articles = []
-        for page in range(1, self.total_page + 1):
-            data = self.fetch_data(page)
-            all_articles.extend(data)
-            logging.info(f"Qiita Page {page} 完了 ({len(data)}件)")
-            if len(data) < self.per_page:
+
+        for page in range(1, self.max_pages + 1):
+            articles = self.fetch_articles(page)
+            all_articles.extend(articles)
+            logging.info(f"Qiita Page {page} 完了 ({len(articles)}件)")
+
+            if len(articles) == 0:
                 break
+
+            # レート制限対策
+            time.sleep(1)
 
         # いいね数でソートして上位N件を返す
         all_articles.sort(key=lambda x: x["likes_count"], reverse=True)
         top_articles = all_articles[:self.top_n]
         logging.info(f"Qiita: {len(all_articles)}件から上位{self.top_n}件を選出")
+
         return [{"title": a["title"], "url": a["url"]} for a in top_articles]
