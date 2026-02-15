@@ -41,45 +41,71 @@ class QiitaScraper:
 
             soup = BeautifulSoup(response.content, "html.parser")
             articles = []
-            seen_urls = set()
 
-            # 記事タイトルのリンクを探す
-            # class="style-2vm86z" のリンクが記事タイトルのリンク
-            article_links = soup.find_all("a", class_="style-2vm86z", href=True)
+            # 記事カードを探す（Qiitaの構造に依存）
+            article_items = soup.find_all("article", class_="style-1w7apwp")
 
-            for link in article_links:
+            if not article_items:
+                # フォールバック: 別のクラス名を試す（古い構造）
+                article_items = soup.find_all("article", class_="style-1gr9egx")
+
+            if not article_items:
+                # さらにフォールバック
+                article_items = soup.find_all("article")
+
+            for item in article_items:
                 try:
-                    href = link["href"]
-                    # 絶対URLに変換
-                    if not href.startswith("http"):
-                        href = f"{self.BASE_URL}{href}"
+                    # タイトルとURLを抽出
+                    # 最新のHTML構造: h2内のaタグ
+                    title_elem = item.find("h2")
+                    if not title_elem:
+                        # フォールバック: 直接aタグを探す
+                        title_elem = item.find("a", class_="style-w8rf03")
 
-                    # 重複チェック
-                    if href in seen_urls:
+                    if not title_elem:
                         continue
-                    seen_urls.add(href)
 
-                    title = link.get_text(strip=True)
-                    if not title:
+                    link_elem = title_elem.find("a") if title_elem.name != "a" else title_elem
+                    if not link_elem or not link_elem.get("href"):
                         continue
+
+                    title = link_elem.get_text(strip=True)
+                    url = link_elem["href"]
+                    if not url.startswith("http"):
+                        url = f"{self.BASE_URL}{url}"
+
+                    # 投稿日時を抽出
+                    published_date = None
+                    time_elem = item.find("time")
+                    if time_elem and time_elem.get("datetime"):
+                        # datetime属性から日付を抽出（例: "2024-02-14T10:30:00Z"）
+                        datetime_str = time_elem["datetime"]
+                        try:
+                            # ISO形式の日時をパース
+                            published_date = datetime_str.split("T")[0]  # YYYY-MM-DD部分のみ
+                        except Exception:
+                            pass
 
                     # いいね数を抽出（オプション）
-                    # 記事カード内のLIKEボタンを探す
                     likes = 0
-                    parent = link.find_parent("article") or link.find_parent("div")
-                    if parent:
-                        like_elem = parent.find("span", attrs={"data-hyperlink": "LikeButton"})
-                        if like_elem:
-                            likes_text = like_elem.get_text(strip=True)
-                            try:
-                                likes = int(likes_text)
-                            except (ValueError, TypeError):
-                                likes = 0
+                    # 最新のHTML構造
+                    like_elem = item.find("span", class_="style-qrq9vy")
+                    if not like_elem:
+                        # 古いHTML構造のフォールバック
+                        like_elem = item.find("span", attrs={"data-hyperlink": "LikeButton"})
+
+                    if like_elem:
+                        likes_text = like_elem.get_text(strip=True)
+                        try:
+                            likes = int(likes_text)
+                        except (ValueError, TypeError):
+                            likes = 0
 
                     articles.append({
                         "title": title,
-                        "url": href,
+                        "url": url,
                         "likes_count": likes,
+                        "published_date": published_date,
                     })
 
                 except Exception as e:
@@ -111,9 +137,16 @@ class QiitaScraper:
             # レート制限対策
             time.sleep(1)
 
+        # 昨日の記事のみフィルタリング
+        yesterday_articles = [
+            a for a in all_articles
+            if a.get("published_date") == self.yesterday_str
+        ]
+        logging.info(f"Qiita: {len(all_articles)}件中、昨日の記事は{len(yesterday_articles)}件")
+
         # いいね数でソートして上位N件を返す
-        all_articles.sort(key=lambda x: x["likes_count"], reverse=True)
-        top_articles = all_articles[:self.top_n]
-        logging.info(f"Qiita: {len(all_articles)}件から上位{self.top_n}件を選出")
+        yesterday_articles.sort(key=lambda x: x["likes_count"], reverse=True)
+        top_articles = yesterday_articles[:self.top_n]
+        logging.info(f"Qiita: 昨日の記事から上位{self.top_n}件を選出")
 
         return [{"title": a["title"], "url": a["url"]} for a in top_articles]
