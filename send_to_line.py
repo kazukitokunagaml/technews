@@ -20,7 +20,7 @@ class LineMessenger:
             lines.append(f"   {article['url']}")
         return "\n".join(lines)
 
-    def send_multi_platform(self, qiita_articles, zenn_articles, techfeed_articles):
+    def send_multi_platform(self, qiita_articles, zenn_articles):
         """複数プラットフォームの記事をまとめてLINEに送信"""
         sections = [
             "昨日の人気テック記事まとめ",
@@ -28,8 +28,6 @@ class LineMessenger:
             self._format_section("Qiita", qiita_articles),
             "",
             self._format_section("Zenn", zenn_articles),
-            "",
-            self._format_section("TechFeed", techfeed_articles),
         ]
         text = "\n".join(sections)
 

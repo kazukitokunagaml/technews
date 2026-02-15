@@ -4,7 +4,7 @@ GitHub Actions経由で技術記事を自動収集し、LINE Messaging APIでブ
 
 ## 機能
 
-- **記事収集**: Qiita、Zenn、TechFeedから人気記事を取得
+- **記事収集**: Qiita、Zennから人気記事を取得
 - **自動実行**: GitHub Actionsで毎日8時（JST）に自動実行
 - **LINE配信**: LINE Messaging APIでブロードキャスト配信
 
@@ -54,7 +54,6 @@ GitHub Actions経由で技術記事を自動収集し、LINE Messaging APIでブ
 ### 記事取得
 - **Qiita**: Webスクレイピング（BeautifulSoup）
 - **Zenn**: 公開API
-- **TechFeed**: RSSフィード
 
 各サービスから上位5件の記事を取得し、LINEで配信します。
 
@@ -102,7 +101,6 @@ GitHub Actionsのログ：
 - **Python 3.11**
 - **BeautifulSoup4**: Qiitaスクレイピング
 - **requests**: HTTP通信
-- **feedparser**: TechFeed RSS解析
 - **line-bot-sdk**: LINE Messaging API
 - **GitHub Actions**: 自動実行
 

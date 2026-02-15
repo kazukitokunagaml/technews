@@ -6,7 +6,6 @@ from dotenv import load_dotenv
 
 from qiita_scraper import QiitaScraper
 from zenn_scraper import ZennScraper
-from techfeed_scraper import TechFeedScraper
 from send_to_line import LineMessenger
 
 logging.basicConfig(
@@ -38,17 +37,9 @@ def main():
         logging.error(f"Zenn取得失敗: {e}")
         zenn_articles = []
 
-    # TechFeed
-    try:
-        techfeed = TechFeedScraper(top_n=5)
-        techfeed_articles = techfeed.run()
-    except Exception as e:
-        logging.error(f"TechFeed取得失敗: {e}")
-        techfeed_articles = []
+    logging.info(f"取得結果: Qiita={len(qiita_articles)}件, Zenn={len(zenn_articles)}件")
 
-    logging.info(f"取得結果: Qiita={len(qiita_articles)}件, Zenn={len(zenn_articles)}件, TechFeed={len(techfeed_articles)}件")
-
-    if not any([qiita_articles, zenn_articles, techfeed_articles]):
+    if not any([qiita_articles, zenn_articles]):
         logging.warning("全てのプラットフォームで記事が見つかりませんでした。送信をスキップします。")
         # 0件でも送信を試みる場合は以下の行をコメントアウト
         # return
@@ -60,7 +51,7 @@ def main():
         sys.exit(1)
 
     messenger = LineMessenger(channel_access_token=channel_token)
-    messenger.send_multi_platform(qiita_articles, zenn_articles, techfeed_articles)
+    messenger.send_multi_platform(qiita_articles, zenn_articles)
     logging.info("=== 完了 ===")
 
 
