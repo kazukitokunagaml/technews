@@ -137,11 +137,13 @@ class QiitaScraper:
             # レート制限対策
             time.sleep(1)
 
-        # 昨日の記事のみフィルタリング
-        yesterday_articles = [
-            a for a in all_articles
-            if a.get("published_date") == self.yesterday_str
-        ]
+        # 昨日の記事のみフィルタリング（URLで重複排除）
+        seen_urls: set = set()
+        yesterday_articles = []
+        for a in all_articles:
+            if a.get("published_date") == self.yesterday_str and a["url"] not in seen_urls:
+                seen_urls.add(a["url"])
+                yesterday_articles.append(a)
         logging.info(f"Qiita: {len(all_articles)}件中、昨日の記事は{len(yesterday_articles)}件")
 
         # いいね数でソートして上位N件を返す
