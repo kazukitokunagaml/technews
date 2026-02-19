@@ -46,6 +46,7 @@ class ZennScraper:
     def run(self):
         logging.info("Zenn: 昨日の人気記事を取得中...")
         all_articles = []
+        seen_urls = set()
         for page in range(1, self.max_pages + 1):
             articles = self.fetch_page(page)
             if not articles:
@@ -54,10 +55,12 @@ class ZennScraper:
             found_older = False
             for article in articles:
                 published = self._parse_date_jst(article.get("published_at", ""))
-                if published == self.yesterday_str:
+                url = f"https://zenn.dev{article.get('path', '')}"
+                if published == self.yesterday_str and url not in seen_urls:
+                    seen_urls.add(url)
                     all_articles.append({
                         "title": article.get("title", ""),
-                        "url": f"https://zenn.dev{article.get('path', '')}",
+                        "url": url,
                         "liked_count": article.get("liked_count", 0),
                     })
                 elif published < self.yesterday_str:
