@@ -1,9 +1,6 @@
 name: Daily Tech Digest
 
 on:
-  push:
-    branches:
-      - main
   schedule:
     # 毎朝8時(JST) = 23時(UTC、前日)に実行
     - cron: "0 22 * * *"

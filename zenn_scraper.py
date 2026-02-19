@@ -12,14 +12,14 @@ class ZennScraper:
     BASE_URL = "https://zenn.dev/api/articles"
     JST = datetime.timezone(datetime.timedelta(hours=9))
 
-    def __init__(self, top_n=5, max_pages=5):
+    def __init__(self, top_n=5, max_pages=20):
         self.top_n = top_n
         self.max_pages = max_pages
         # GitHub Actions (UTC) で実行されるため、JST基準で昨日を計算する
         today_jst = datetime.datetime.now(self.JST).date()
         yesterday = today_jst - datetime.timedelta(days=1)
         self.yesterday_str = yesterday.strftime("%Y-%m-%d")
-        logging.info(f"Zenn 対象日: {self.yesterday_str}")
+        logging.info(f"Zenn 対象日: {self.yesterday_str} (max_pages={self.max_pages})")
 
     def _parse_date_jst(self, published_at):
         """published_atをJST日付文字列(YYYY-MM-DD)に変換する"""
