@@ -10,13 +10,26 @@ class ZennScraper:
     """Zennから昨日の人気記事を取得するスクレイパー"""
 
     BASE_URL = "https://zenn.dev/api/articles"
+    JST = datetime.timezone(datetime.timedelta(hours=9))
 
     def __init__(self, top_n=5, max_pages=5):
         self.top_n = top_n
         self.max_pages = max_pages
-        yesterday = datetime.date.today() - datetime.timedelta(days=1)
+        # GitHub Actions (UTC) で実行されるため、JST基準で昨日を計算する
+        today_jst = datetime.datetime.now(self.JST).date()
+        yesterday = today_jst - datetime.timedelta(days=1)
         self.yesterday_str = yesterday.strftime("%Y-%m-%d")
         logging.info(f"Zenn 対象日: {self.yesterday_str}")
+
+    def _parse_date_jst(self, published_at):
+        """published_atをJST日付文字列(YYYY-MM-DD)に変換する"""
+        if not published_at:
+            return ""
+        try:
+            dt = datetime.datetime.fromisoformat(published_at)
+            return dt.astimezone(self.JST).strftime("%Y-%m-%d")
+        except (ValueError, AttributeError):
+            return published_at.split("T")[0]
 
     def fetch_page(self, page):
         url = f"{self.BASE_URL}?order=latest&page={page}"
@@ -33,6 +46,7 @@ class ZennScraper:
     def run(self):
         logging.info("Zenn: 昨日の人気記事を取得中...")
         all_articles = []
+        seen_urls = set()
         for page in range(1, self.max_pages + 1):
             articles = self.fetch_page(page)
             if not articles:
@@ -40,11 +54,13 @@ class ZennScraper:
 
             found_older = False
             for article in articles:
-                published = article.get("published_at", "").split("T")[0]
-                if published == self.yesterday_str:
+                published = self._parse_date_jst(article.get("published_at", ""))
+                url = f"https://zenn.dev{article.get('path', '')}"
+                if published == self.yesterday_str and url not in seen_urls:
+                    seen_urls.add(url)
                     all_articles.append({
                         "title": article.get("title", ""),
-                        "url": f"https://zenn.dev{article.get('path', '')}",
+                        "url": url,
                         "liked_count": article.get("liked_count", 0),
                     })
                 elif published < self.yesterday_str:
