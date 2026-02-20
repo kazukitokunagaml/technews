@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 
 from qiita_scraper import QiitaScraper
 from zenn_scraper import ZennScraper
-from send_to_line import LineMessenger
+from send_to_discord import DiscordMessenger
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -86,13 +86,13 @@ def main():
     else:
         logging.info("PINECONE_API_KEY または GOOGLE_API_KEY が未設定のため Pinecone upsert をスキップ")
 
-    # LINEに送信
-    channel_token = os.getenv("CHANNEL_ACCESS_TOKEN")
-    if not channel_token:
-        logging.error("CHANNEL_ACCESS_TOKEN が設定されていません")
+    # Discord に送信
+    webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
+    if not webhook_url:
+        logging.error("DISCORD_WEBHOOK_URL が設定されていません")
         sys.exit(1)
 
-    messenger = LineMessenger(channel_access_token=channel_token)
+    messenger = DiscordMessenger(webhook_url=webhook_url)
     messenger.send_multi_platform(qiita_articles, zenn_articles)
     logging.info("=== 完了 ===")
 

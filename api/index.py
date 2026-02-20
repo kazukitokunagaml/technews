@@ -6,10 +6,9 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import google.generativeai as genai
-from flask import Flask, abort, request
-from linebot import LineBotApi, WebhookHandler
-from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage
+import nacl.exceptions
+import nacl.signing
+from flask import Flask, abort, jsonify, request
 
 from vector_store import query_similar
 
@@ -18,71 +17,95 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-line_bot_api = LineBotApi(os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", ""))
-line_handler = WebhookHandler(os.environ.get("LINE_CHANNEL_SECRET", ""))
+DISCORD_PUBLIC_KEY = os.environ.get("DISCORD_PUBLIC_KEY", "")
+
+# Discord Interaction types
+_PING = 1
+_APPLICATION_COMMAND = 2
+
+# Discord Interaction response types
+_PONG = 1
+_CHANNEL_MESSAGE_WITH_SOURCE = 4
 
 
-@app.route("/api/index", methods=["POST"])
-def callback():
-    """LINE Webhook エンドポイント"""
-    signature = request.headers.get("X-Line-Signature", "")
-    body = request.get_data(as_text=True)
-
+def _verify_discord_signature(public_key: str, signature: str, timestamp: str, body: str) -> bool:
+    """Discord の Ed25519 署名を検証する"""
     try:
-        line_handler.handle(body, signature)
-    except InvalidSignatureError:
-        logger.warning("Invalid LINE signature")
-        abort(400)
+        vk = nacl.signing.VerifyKey(bytes.fromhex(public_key))
+        vk.verify(f"{timestamp}{body}".encode(), bytes.fromhex(signature))
+        return True
+    except (nacl.exceptions.BadSignatureError, Exception):
+        return False
 
-    return "OK"
 
-
-@line_handler.add(MessageEvent, message=TextMessage)
-def handle_message(event):
-    """ユーザーのテキストメッセージを受け取り、RAGで回答を生成して返信する"""
-    user_question = event.message.text
-    logger.info(f"受信メッセージ: {user_question}")
-
+def _generate_rag_reply(question: str) -> str:
+    """Pinecone で関連記事を検索し、Gemini Flash で回答を生成する"""
     try:
-        # 1. 質問をベクトル化してPineconeで関連記事を検索
-        matches = query_similar(user_question, top_k=3)
+        matches = query_similar(question, top_k=3)
 
         if not matches:
-            reply_text = "関連する記事が見つかりませんでした。別のキーワードで試してみてください。"
-        else:
-            # 2. 取得した記事のテキストをコンテキストとして組み立てる
-            context_parts = []
-            for match in matches:
-                meta = match["metadata"]
-                context_parts.append(
-                    f"タイトル: {meta.get('title', '')}\n"
-                    f"URL: {meta.get('url', '')}\n"
-                    f"内容: {meta.get('text', '')}"
-                )
-            context = "\n\n---\n\n".join(context_parts)
+            return "関連する記事が見つかりませんでした。別のキーワードで試してみてください。"
 
-            # 3. Gemini Flash で回答を生成（タイムアウト対策で軽量モデルを使用）
-            genai.configure(api_key=os.environ.get("GOOGLE_API_KEY", ""))
-            model = genai.GenerativeModel("gemini-2.0-flash")
-
-            prompt = (
-                "以下のテック記事を参考に、ユーザーの質問に日本語で簡潔に回答してください。\n\n"
-                f"参考記事:\n{context}\n\n"
-                f"ユーザーの質問: {user_question}\n\n"
-                "回答は300文字以内にまとめ、関連記事のURLを必ず含めてください。"
+        context_parts = []
+        for match in matches:
+            meta = match["metadata"]
+            context_parts.append(
+                f"タイトル: {meta.get('title', '')}\n"
+                f"URL: {meta.get('url', '')}\n"
+                f"内容: {meta.get('text', '')}"
             )
+        context = "\n\n---\n\n".join(context_parts)
 
-            response = model.generate_content(prompt)
-            reply_text = response.text[:2000]  # LINE メッセージ上限
+        genai.configure(api_key=os.environ.get("GOOGLE_API_KEY", ""))
+        model = genai.GenerativeModel("gemini-2.0-flash")
+
+        prompt = (
+            "以下のテック記事を参考に、ユーザーの質問に日本語で簡潔に回答してください。\n\n"
+            f"参考記事:\n{context}\n\n"
+            f"ユーザーの質問: {question}\n\n"
+            "回答は300文字以内にまとめ、関連記事のURLを必ず含めてください。"
+        )
+
+        response = model.generate_content(prompt)
+        return response.text[:2000]  # Discord message limit
 
     except Exception as e:
         logger.error(f"RAG処理エラー: {e}")
-        reply_text = "申し訳ありません。回答の生成中にエラーが発生しました。"
+        return "申し訳ありません。回答の生成中にエラーが発生しました。"
 
-    line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text=reply_text),
-    )
+
+@app.route("/api/index", methods=["POST"])
+def interactions():
+    """Discord Interactions エンドポイント"""
+    signature = request.headers.get("X-Signature-Ed25519", "")
+    timestamp = request.headers.get("X-Signature-Timestamp", "")
+    body = request.get_data(as_text=True)
+
+    if not _verify_discord_signature(DISCORD_PUBLIC_KEY, signature, timestamp, body):
+        logger.warning("Discord署名の検証に失敗しました")
+        abort(401)
+
+    data = request.get_json()
+    interaction_type = data.get("type")
+
+    # Type 1: PING（Discordの疎通確認）
+    if interaction_type == _PING:
+        return jsonify({"type": _PONG})
+
+    # Type 2: スラッシュコマンド
+    if interaction_type == _APPLICATION_COMMAND:
+        command_name = data.get("data", {}).get("name", "")
+        if command_name == "ask":
+            options = data.get("data", {}).get("options", [])
+            question = next((o["value"] for o in options if o["name"] == "question"), "")
+            logger.info(f"受信コマンド /ask: {question}")
+            reply_text = _generate_rag_reply(question)
+            return jsonify({
+                "type": _CHANNEL_MESSAGE_WITH_SOURCE,
+                "data": {"content": reply_text},
+            })
+
+    return jsonify({"type": _PONG})
 
 
 # Vercel WSGI ハンドラ
