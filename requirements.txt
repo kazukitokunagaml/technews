@@ -2,3 +2,6 @@ python-dotenv
 line-bot-sdk
 requests
 beautifulsoup4
+pinecone
+google-generativeai
+flask

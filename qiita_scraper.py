@@ -151,4 +151,7 @@ class QiitaScraper:
         top_articles = yesterday_articles[:self.top_n]
         logging.info(f"Qiita: 昨日の記事から上位{self.top_n}件を選出")
 
-        return [{"title": a["title"], "url": a["url"]} for a in top_articles]
+        return [
+            {"title": a["title"], "url": a["url"], "published_date": a.get("published_date", "")}
+            for a in top_articles
+        ]
