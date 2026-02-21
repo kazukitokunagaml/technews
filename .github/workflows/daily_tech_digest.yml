@@ -23,7 +23,6 @@ jobs:
       - name: Run daily digest
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
-          PINECONE_INDEX_NAME: ${{ secrets.PINECONE_INDEX_NAME }}
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         run: python main.py

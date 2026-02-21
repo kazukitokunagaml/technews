@@ -1,47 +1,64 @@
 import logging
-
 import requests
 
 logger = logging.getLogger(__name__)
 
-# Discord message character limit
-_MAX_LENGTH = 2000
-
-
 class DiscordMessenger:
-    def __init__(self, webhook_url: str):
+    def __init__(self, webhook_url: str, bot_token: str = None):
         self.webhook_url = webhook_url
+        self.bot_token = bot_token
 
-    def _format_section(self, platform_name: str, articles: list) -> str:
-        if not articles:
-            return f"**【{platform_name}】**\n記事が見つかりませんでした"
-        lines = [f"**【{platform_name}】**"]
-        for i, article in enumerate(articles, 1):
-            lines.append(f"{i}. {article['title']}")
-            lines.append(f"   {article['url']}")
-        return "\n".join(lines)
-
-    def send_multi_platform(self, qiita_articles: list, zenn_articles: list) -> None:
-        """Qiita・Zennの記事まとめを Discord Webhook で送信する"""
-        sections = [
-            "**昨日の人気テック記事まとめ**",
-            "",
-            self._format_section("Qiita", qiita_articles),
-            "",
-            self._format_section("Zenn", zenn_articles),
-        ]
-        content = "\n".join(sections)
-
-        if len(content) > _MAX_LENGTH:
-            content = content[:_MAX_LENGTH - 3] + "..."
-
+    def send_article_with_summary(self, article: dict, summary: str) -> None:
+        """記事のタイトル・リンクを送信し、要約を投稿する"""
+        
+        # フォーラムチャンネルの場合、webhook に thread_name を指定すると新規投稿（スレッド作成）ができる
+        # それ以外の場合は通常のメッセージとして投稿する
         try:
+            # 1. 親メッセージの投稿
+            content = f"### {article['title']}\n{article['url']}"
             resp = requests.post(
-                self.webhook_url,
+                f"{self.webhook_url}?wait=true",
                 json={"content": content},
                 timeout=10,
             )
             resp.raise_for_status()
-            logger.info("Discord にメッセージを送信しました")
+            message_data = resp.json()
+            message_id = message_data.get("id")
+            channel_id = message_data.get("channel_id")
+
+            # 2. スレッド作成と要約投稿
+            if self.bot_token and message_id and channel_id:
+                # Bot トークンがある場合：メッセージからスレッドを作成
+                thread_url = f"https://discord.com/api/v10/channels/{channel_id}/messages/{message_id}/threads"
+                headers = {
+                    "Authorization": f"Bot {self.bot_token}",
+                    "Content-Type": "application/json"
+                }
+                thread_resp = requests.post(
+                    thread_url,
+                    json={"name": f"要約: {article['title'][:50]}"},
+                    headers=headers,
+                    timeout=10
+                )
+                if thread_resp.status_code == 201:
+                    thread_id = thread_resp.json().get("id")
+                    # 作成したスレッドに要約を投稿
+                    requests.post(
+                        f"{self.webhook_url}?thread_id={thread_id}",
+                        json={"content": f"**詳細要約:**\n{summary}"},
+                        timeout=10
+                    ).raise_for_status()
+                    logger.info(f"スレッドに要約を投稿しました: {article['title']}")
+                    return
+
+            # Bot トークンがない、またはスレッド作成失敗時のフォールバック：同一メッセージに追記投稿
+            # または要約を別のメッセージとして投稿
+            requests.post(
+                self.webhook_url,
+                json={"content": f"**詳細要約:**\n{summary}"},
+                timeout=10
+            ).raise_for_status()
+            logger.info(f"要約をメッセージとして投稿しました: {article['title']}")
+
         except Exception as e:
-            logger.error(f"Discord 送信エラー: {e}")
+            logger.error(f"Discord 送信エラー ({article['title']}): {e}")

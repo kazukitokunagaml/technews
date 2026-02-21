@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+import time
 
 import requests
 from bs4 import BeautifulSoup
@@ -9,6 +10,7 @@ from dotenv import load_dotenv
 from qiita_scraper import QiitaScraper
 from zenn_scraper import ZennScraper
 from send_to_discord import DiscordMessenger
+from summarizer import Summarizer
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -18,17 +20,27 @@ logging.basicConfig(
 
 
 def fetch_article_text(url: str) -> str:
-    """Fetch og:description from an article URL to use as article body text."""
+    """記事のURLから本文テキストを抽出する"""
     try:
-        resp = requests.get(
-            url,
-            timeout=10,
-            headers={"User-Agent": "TechDigest/1.0"},
-        )
+        resp = requests.get(url, timeout=10, headers={"User-Agent": "TechDigest/1.0"})
         soup = BeautifulSoup(resp.content, "html.parser")
+        
+        content_elem = None
+        if "qiita.com" in url:
+            content_elem = soup.find("section", class_="it-MdContent")
+        elif "zenn.dev" in url:
+            content_elem = soup.find("div", class_="znc")
+        
+        if not content_elem:
+            content_elem = soup.find("article") or soup.find("main")
+            
+        if content_elem:
+            for s in content_elem(["script", "style"]):
+                s.decompose()
+            return content_elem.get_text(strip=True, separator="\n")
+            
         meta = soup.find("meta", property="og:description")
-        if meta and meta.get("content"):
-            return meta["content"]
+        return meta["content"] if meta else ""
     except Exception as e:
         logging.warning(f"記事テキスト取得失敗 {url}: {e}")
     return ""
@@ -37,63 +49,38 @@ def fetch_article_text(url: str) -> str:
 def main():
     load_dotenv()
 
-    # 各プラットフォームから人気記事を取得
-    logging.info("=== 記事取得開始 ===")
-
-    # Qiita
-    try:
-        qiita = QiitaScraper(top_n=5)
-        qiita_articles = qiita.run()
-    except Exception as e:
-        logging.error(f"Qiita取得失敗: {e}")
-        qiita_articles = []
-
-    # Zenn
-    try:
-        zenn = ZennScraper(top_n=5)
-        zenn_articles = zenn.run()
-    except Exception as e:
-        logging.error(f"Zenn取得失敗: {e}")
-        zenn_articles = []
-
-    logging.info(f"取得結果: Qiita={len(qiita_articles)}件, Zenn={len(zenn_articles)}件")
-
-    if not any([qiita_articles, zenn_articles]):
-        logging.warning("全てのプラットフォームで記事が見つかりませんでした。送信をスキップします。")
-        # 0件でも送信を試みる場合は以下の行をコメントアウト
-        # return
-
-    # Pinecone へのベクトル保存
-    pinecone_api_key = os.getenv("PINECONE_API_KEY")
-    google_api_key = os.getenv("GOOGLE_API_KEY")
-    if pinecone_api_key and google_api_key:
-        try:
-            from vector_store import upsert_articles
-            logging.info("=== Pinecone upsert 開始 ===")
-            pinecone_articles = []
-            for article in qiita_articles + zenn_articles:
-                text = fetch_article_text(article["url"])
-                pinecone_articles.append({
-                    "title": article["title"],
-                    "url": article["url"],
-                    "text": text or article["title"],
-                    "published_at": article.get("published_date", ""),
-                })
-            upsert_articles(pinecone_articles)
-            logging.info("=== Pinecone upsert 完了 ===")
-        except Exception as e:
-            logging.error(f"Pinecone upsert 失敗: {e}")
-    else:
-        logging.info("PINECONE_API_KEY または GOOGLE_API_KEY が未設定のため Pinecone upsert をスキップ")
-
-    # Discord に送信
     webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
-    if not webhook_url:
-        logging.error("DISCORD_WEBHOOK_URL が設定されていません")
+    google_api_key = os.getenv("GOOGLE_API_KEY")
+    # スレッド作成を自動化したい場合は Bot Token が必要ですが、
+    # なければスレッドなしで投稿を継続するようにします。
+    bot_token = os.getenv("DISCORD_BOT_TOKEN")
+
+    if not webhook_url or not google_api_key:
+        logging.error("DISCORD_WEBHOOK_URL または GOOGLE_API_KEY が設定されていません")
         sys.exit(1)
 
-    messenger = DiscordMessenger(webhook_url=webhook_url)
-    messenger.send_multi_platform(qiita_articles, zenn_articles)
+    logging.info("=== 記事取得開始 ===")
+    
+    # Qiita & Zenn から記事取得
+    qiita_articles = QiitaScraper(top_n=5).run()
+    zenn_articles = ZennScraper(top_n=5).run()
+    all_articles = qiita_articles + zenn_articles
+
+    summarizer = Summarizer(google_api_key)
+    messenger = DiscordMessenger(webhook_url=webhook_url, bot_token=bot_token)
+
+    for article in all_articles:
+        logging.info(f"処理中: {article['title']}")
+        
+        text = fetch_article_text(article["url"])
+        summary = summarizer.summarize(article["title"], text or article["title"])
+        
+        # Discord 送信
+        messenger.send_article_with_summary(article, summary)
+        
+        # レート制限対策
+        time.sleep(2)
+
     logging.info("=== 完了 ===")
 
 
