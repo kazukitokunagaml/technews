@@ -62,6 +62,7 @@ class ZennScraper:
                         "title": article.get("title", ""),
                         "url": url,
                         "liked_count": article.get("liked_count", 0),
+                        "published_date": published,
                     })
                 elif published < self.yesterday_str:
                     found_older = True
@@ -74,4 +75,7 @@ class ZennScraper:
         all_articles.sort(key=lambda x: x["liked_count"], reverse=True)
         top_articles = all_articles[:self.top_n]
         logging.info(f"Zenn: {len(all_articles)}件から上位{self.top_n}件を選出")
-        return [{"title": a["title"], "url": a["url"]} for a in top_articles]
+        return [
+            {"title": a["title"], "url": a["url"], "published_date": a.get("published_date", "")}
+            for a in top_articles
+        ]
