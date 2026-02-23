@@ -66,17 +66,15 @@ def main():
     summarizer = Summarizer(google_api_key)
     messenger = DiscordMessenger(webhook_url=webhook_url)
 
+    summaries = []
     for article in all_articles:
         logging.info(f"処理中: {article['title']}")
-        
         text = fetch_article_text(article["url"])
         summary = summarizer.summarize(article["title"], text or article["title"])
-        
-        # Discord 送信
-        messenger.send_article_with_summary(article, summary)
-        
-        # レート制限対策
+        summaries.append(summary)
         time.sleep(2)
+
+    messenger.create_daily_forum_post(all_articles, summaries)
 
     logging.info("=== 完了 ===")
 
