@@ -51,9 +51,6 @@ def main():
 
     webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
     google_api_key = os.getenv("GOOGLE_API_KEY")
-    # スレッド作成を自動化したい場合は Bot Token が必要ですが、
-    # なければスレッドなしで投稿を継続するようにします。
-    bot_token = os.getenv("DISCORD_BOT_TOKEN")
 
     if not webhook_url or not google_api_key:
         logging.error("DISCORD_WEBHOOK_URL または GOOGLE_API_KEY が設定されていません")
@@ -67,7 +64,7 @@ def main():
     all_articles = qiita_articles + zenn_articles
 
     summarizer = Summarizer(google_api_key)
-    messenger = DiscordMessenger(webhook_url=webhook_url, bot_token=bot_token)
+    messenger = DiscordMessenger(webhook_url=webhook_url)
 
     for article in all_articles:
         logging.info(f"処理中: {article['title']}")
