@@ -71,7 +71,11 @@ def main():
     for article in all_articles:
         logging.info(f"処理中: {article['title']}")
         text = fetch_article_text(article["url"])
-        summary = summarizer.summarize(article["title"], text or article["title"])
+        try:
+            summary = summarizer.summarize(article["title"], text or article["title"])
+        except Exception as e:
+            logging.warning(f"要約取得失敗 ({article['title']}): {e}")
+            summary = "（要約取得失敗）"
         summaries.append(summary)
         time.sleep(2)
 
