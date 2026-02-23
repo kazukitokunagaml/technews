@@ -23,6 +23,7 @@ def fetch_article_text(url: str) -> str:
     """記事のURLから本文テキストを抽出する"""
     try:
         resp = requests.get(url, timeout=10, headers={"User-Agent": "TechDigest/1.0"})
+        resp.raise_for_status()
         soup = BeautifulSoup(resp.content, "html.parser")
         
         content_elem = None
