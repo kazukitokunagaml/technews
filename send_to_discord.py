@@ -22,7 +22,16 @@ class DiscordMessenger:
         lines = [f"📰 本日のテックニュース ({len(articles)}件)"]
         for i, article in enumerate(articles, 1):
             lines.append(f"{i}. [{article['title']}](<{article['url']}>)")
-        index_content = "\n".join(lines)[:2000]
+        # 2000文字制限内に収まるよう行単位でトリミング
+        index_lines = []
+        total = 0
+        for line in lines:
+            if total + len(line) + 1 > 2000:
+                logger.warning("記事一覧が2000文字を超えるため一部省略しました")
+                break
+            index_lines.append(line)
+            total += len(line) + 1
+        index_content = "\n".join(index_lines)
 
         # フォーラムへ投稿してスレッドを作成
         try:
@@ -33,6 +42,9 @@ class DiscordMessenger:
             )
             resp.raise_for_status()
             thread_id = resp.json().get("channel_id")
+            if not thread_id:
+                logger.error("thread_id が取得できませんでした。レスポンス: %s", resp.json())
+                return
             logger.info(f"フォーラムスレッド作成: {thread_name} (id={thread_id})")
         except Exception as e:
             logger.error(f"フォーラムスレッド作成エラー: {e}")
