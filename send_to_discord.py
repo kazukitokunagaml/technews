@@ -14,7 +14,7 @@ class DiscordMessenger:
             resp = requests.post(
                 f"{self.webhook_url}?wait=true",
                 json={
-                    "content": f"### {article['title']}\n{article['url']}"[:2000],
+                    "content": f"{article['url']}"[:2000],
                     "thread_name": article['title'][:100],
                 },
                 timeout=10,
