@@ -1,6 +1,5 @@
 import datetime
 import logging
-import time
 
 import requests
 
@@ -35,7 +34,9 @@ class DiscordMessenger:
             resp.raise_for_status()
             thread_id = resp.json().get("channel_id")
             if not thread_id:
-                logger.error("thread_id が取得できませんでした。レスポンス: %s", resp.json())
+                logger.error(
+                    "thread_id が取得できませんでした。レスポンス: %s", resp.json()
+                )
                 return
             logger.info(f"フォーラムスレッド作成: {thread_name} (id={thread_id})")
         except Exception as e:
