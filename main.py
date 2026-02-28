@@ -1,8 +1,6 @@
 import logging
 import os
 import sys
-import time
-
 import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
@@ -58,7 +56,7 @@ def main():
         sys.exit(1)
 
     logging.info("=== 記事取得開始 ===")
-    
+
     # Qiita & Zenn から記事取得
     qiita_articles = QiitaScraper(top_n=5).run()
     zenn_articles = ZennScraper(top_n=5).run()
@@ -67,19 +65,21 @@ def main():
     summarizer = Summarizer(google_api_key)
     messenger = DiscordMessenger(webhook_url=webhook_url)
 
-    summaries = []
-    for article in all_articles:
-        logging.info(f"処理中: {article['title']}")
-        text = fetch_article_text(article["url"])
-        try:
-            summary = summarizer.summarize(article["title"], text or article["title"])
-        except Exception as e:
-            logging.warning(f"要約取得失敗 ({article['title']}): {e}")
-            summary = "（要約取得失敗）"
-        summaries.append(summary)
-        time.sleep(2)
+    # 全記事の中から渾身の1本を選定
+    logging.info(f"候補記事 {len(all_articles)} 件から最良の1本を選定中...")
+    best_index = summarizer.select_best(all_articles)
+    best_article = all_articles[best_index]
+    logging.info(f"選定結果: {best_article['title']}")
 
-    messenger.create_daily_forum_post(all_articles, summaries)
+    # 選定記事の本文を取得して詳細解説を生成
+    text = fetch_article_text(best_article["url"])
+    try:
+        summary = summarizer.summarize(best_article["title"], text or best_article["title"])
+    except Exception as e:
+        logging.warning(f"要約取得失敗 ({best_article['title']}): {e}")
+        summary = "（要約取得失敗）"
+
+    messenger.post_best_article(best_article, summary)
 
     logging.info("=== 完了 ===")
 

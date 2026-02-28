@@ -11,33 +11,25 @@ class DiscordMessenger:
     def __init__(self, webhook_url: str):
         self.webhook_url = webhook_url
 
-    def create_daily_forum_post(
-        self, articles: list[dict], summaries: list[str]
-    ) -> None:
-        """1日分の記事一覧と各要約を1つのフォーラムスレッドに投稿する"""
+    def post_best_article(self, article: dict, summary: str) -> None:
+        """本日の渾身の1記事をDiscordフォーラムスレッドに投稿する"""
         today = datetime.date.today().strftime("%Y-%m-%d")
-        thread_name = f"{today} テックニュース"
+        thread_name = f"{today} 本日の注目記事"
 
-        # 記事一覧メッセージを組み立てる
-        lines = [f"📰 本日のテックニュース ({len(articles)}件)"]
-        for i, article in enumerate(articles, 1):
-            lines.append(f"{i}. [{article['title']}](<{article['url']}>)")
-        # 2000文字制限内に収まるよう行単位でトリミング
-        index_lines = []
-        total = 0
-        for line in lines:
-            if total + len(line) + 1 > 2000:
-                logger.warning("記事一覧が2000文字を超えるため一部省略しました")
-                break
-            index_lines.append(line)
-            total += len(line) + 1
-        index_content = "\n".join(index_lines)
+        # スレッド作成メッセージ
+        header = (
+            f"🌟 **本日の注目記事** — {today}\n\n"
+            f"**{article['title']}**\n"
+            f"{article['url']}"
+        )
+        if len(header) > 2000:
+            header = header[:1997] + "..."
 
         # フォーラムへ投稿してスレッドを作成
         try:
             resp = requests.post(
                 f"{self.webhook_url}?wait=true",
-                json={"content": index_content, "thread_name": thread_name},
+                json={"content": header, "thread_name": thread_name},
                 timeout=10,
             )
             resp.raise_for_status()
@@ -50,22 +42,16 @@ class DiscordMessenger:
             logger.error(f"フォーラムスレッド作成エラー: {e}")
             return
 
-        # 各記事の要約をスレッドに投稿
-        for article, summary in zip(articles, summaries):
-            content = (
-                f"📌 **{article['title']}**\n"
-                f"{article['url']}\n\n"
-                f"**要約:**\n{summary}"
-            )
-            if len(content) > 2000:
-                content = content[:1997] + "..."
-            try:
-                requests.post(
-                    f"{self.webhook_url}?thread_id={thread_id}",
-                    json={"content": content},
-                    timeout=10,
-                ).raise_for_status()
-                logger.info(f"要約投稿完了: {article['title']}")
-            except Exception as e:
-                logger.error(f"要約投稿エラー ({article['title']}): {e}")
-            time.sleep(1)  # レート制限対策
+        # 詳細解説をスレッドに投稿
+        detail = f"**解説:**\n{summary}"
+        if len(detail) > 2000:
+            detail = detail[:1997] + "..."
+        try:
+            requests.post(
+                f"{self.webhook_url}?thread_id={thread_id}",
+                json={"content": detail},
+                timeout=10,
+            ).raise_for_status()
+            logger.info(f"解説投稿完了: {article['title']}")
+        except Exception as e:
+            logger.error(f"解説投稿エラー: {e}")
