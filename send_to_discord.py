@@ -1,4 +1,3 @@
-import datetime
 import logging
 
 import requests
@@ -12,22 +11,20 @@ class DiscordMessenger:
 
     def post_best_article(self, article: dict, summary: str) -> None:
         """本日の渾身の1記事をDiscordフォーラムスレッドに投稿する"""
-        today = datetime.date.today().strftime("%Y-%m-%d")
-        thread_name = f"{today} 本日の注目記事"
+        thread_name = article['title']
+        if len(thread_name) > 100:
+            thread_name = thread_name[:97] + "..."
 
-        # スレッド作成メッセージ
-        header = (
-            f"**{article['title']}**\n"
-            f"{article['url']}"
-        )
-        if len(header) > 2000:
-            header = header[:1997] + "..."
+        # ティーザー + URL をひとつのメッセージにまとめる
+        content = f"{summary}\n{article['url']}"
+        if len(content) > 2000:
+            content = content[:1997] + "..."
 
         # フォーラムへ投稿してスレッドを作成
         try:
             resp = requests.post(
                 f"{self.webhook_url}?wait=true",
-                json={"content": header, "thread_name": thread_name},
+                json={"content": content, "thread_name": thread_name},
                 timeout=10,
             )
             resp.raise_for_status()
@@ -40,18 +37,3 @@ class DiscordMessenger:
             logger.info(f"フォーラムスレッド作成: {thread_name} (id={thread_id})")
         except Exception as e:
             logger.error(f"フォーラムスレッド作成エラー: {e}")
-            return
-
-        # 詳細解説をスレッドに投稿
-        detail = f"**解説:**\n{summary}"
-        if len(detail) > 2000:
-            detail = detail[:1997] + "..."
-        try:
-            requests.post(
-                f"{self.webhook_url}?thread_id={thread_id}",
-                json={"content": detail},
-                timeout=10,
-            ).raise_for_status()
-            logger.info(f"解説投稿完了: {article['title']}")
-        except Exception as e:
-            logger.error(f"解説投稿エラー: {e}")
