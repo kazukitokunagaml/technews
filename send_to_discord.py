@@ -17,7 +17,6 @@ class DiscordMessenger:
 
         # スレッド作成メッセージ
         header = (
-            f"🌟 **本日の注目記事** — {today}\n\n"
             f"**{article['title']}**\n"
             f"{article['url']}"
         )
