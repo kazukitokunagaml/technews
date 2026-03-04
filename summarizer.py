@@ -40,20 +40,19 @@ class Summarizer:
         return 0  # フォールバック: 最初の記事
 
     def summarize(self, title: str, content: str) -> str:
-        """記事の内容を要約する"""
+        """記事の内容をアニメの次回予告風ティーザーとして生成する"""
         if not content or len(content) < 100:
             logger.info(f"Content too short for summarization: {title}")
             return "（本文が短すぎるため要約をスキップしました）"
 
         prompt = f"""
-以下のテック記事の内容を詳細に解説してください。
-エンジニアが「読む価値があった」と感じられるよう、以下の構成でまとめてください：
+以下のテック記事を3行でまとめてください。
 
-1. **一言まとめ**（30字以内）
-2. **ポイント解説**（重要な点を3〜5個の箇条書き）
-3. **なぜ注目すべきか**（1〜2文）
-
-日本語で出力してください。
+条件:
+- 何についての記事かは伝える（読者が興味あるか判断できるように）
+- 結論も含めて要点を伝える
+- アニメの次回予告のようなテンポとリズムで書く
+- 3行、各行30字前後、記号・番号なし
 
 タイトル: {title}
 本文:
@@ -61,7 +60,7 @@ class Summarizer:
 """
         try:
             response = self.model.generate_content(prompt)
-            return response.text
+            return response.text.strip()
         except Exception as e:
             logger.error(f"Gemini Summarization Error: {e}")
             return "（要約の生成中にエラーが発生しました）"
