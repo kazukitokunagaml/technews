@@ -10,7 +10,7 @@ class Summarizer:
         if not api_key:
             raise ValueError("GOOGLE_API_KEY is not set")
         genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel("gemini-2.5-flash")
+        self.model = genai.GenerativeModel("gemini-3.1-flash-lite-preview")
 
     def select_best(self, articles: list[dict]) -> int:
         """記事リストから最も価値のある1記事のインデックスを返す"""
