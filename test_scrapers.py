@@ -86,5 +86,36 @@ def test_note_scraper_returns_list():
     assert isinstance(articles, list)
 
 
+def test_reddit_scraper_returns_list():
+    """RedditScraper.run() はリストを返す（実HTTPなし）"""
+    from reddit_scraper import RedditScraper
+    from unittest.mock import patch, MagicMock
+
+    mock_data = {
+        "data": {
+            "children": [
+                {"data": {
+                    "title": "Test Tech Article",
+                    "url": "https://example.com/article",
+                    "permalink": "/r/technology/comments/abc/test/",
+                    "score": 1500,
+                    "created_utc": 1741305600,
+                }},
+            ]
+        }
+    }
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = mock_data
+    mock_resp.raise_for_status = MagicMock()
+
+    with patch("requests.Session.get", return_value=mock_resp):
+        scraper = RedditScraper(subreddit="technology", top_n=10)
+        articles = scraper.run()
+
+    assert isinstance(articles, list)
+    assert len(articles) == 1
+    assert articles[0]["title"] == "Test Tech Article"
+
+
 if __name__ == "__main__":
     test_scraping()
