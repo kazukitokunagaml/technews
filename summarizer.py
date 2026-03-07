@@ -12,18 +12,19 @@ class Summarizer:
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel("gemini-2.5-flash")
 
-    def select_best(self, articles: list[dict]) -> int:
+    def select_best(self, articles: list[dict], prefer_tech: bool = False) -> int:
         """記事リストから最も価値のある1記事のインデックスを返す"""
         articles_text = "\n".join(
             f"{i+1}. {a['title']}" for i, a in enumerate(articles)
         )
+        tech_hint = "\n- 技術・プログラミング・AI・開発関連の記事を最優先する" if prefer_tech else ""
         prompt = f"""
-以下のテック記事リストから、最も技術的に価値があり、読者にとって有益な記事を1つ選んでください。
+以下の記事リストから、最も技術的に価値があり、読者にとって有益な記事を1つ選んでください。
 選定基準:
 - 技術的な新規性・革新性
 - 実用性の高さ
 - 幅広いエンジニアに関連する内容
-- トレンドへの関連性
+- トレンドへの関連性{tech_hint}
 
 記事リスト:
 {articles_text}
@@ -37,7 +38,7 @@ class Summarizer:
                 return index
         except Exception as e:
             logger.error(f"記事選定エラー: {e}")
-        return 0  # フォールバック: 最初の記事
+        return 0
 
     def summarize(self, title: str, content: str) -> str:
         """記事の内容を要約する"""
