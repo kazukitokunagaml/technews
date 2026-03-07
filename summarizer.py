@@ -14,6 +14,8 @@ class Summarizer:
 
     def select_best(self, articles: list[dict], prefer_tech: bool = False) -> int:
         """記事リストから最も価値のある1記事のインデックスを返す"""
+        if not articles:
+            return 0
         articles_text = "\n".join(
             f"{i+1}. {a['title']}" for i, a in enumerate(articles)
         )
