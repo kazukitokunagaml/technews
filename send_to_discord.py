@@ -10,21 +10,25 @@ class DiscordMessenger:
     def __init__(self, webhook_url: str):
         self.webhook_url = webhook_url
 
-    def post_best_article(self, article: dict, summary: str) -> None:
-        """本日の渾身の1記事をDiscordフォーラムスレッドに投稿する"""
+    def post_best_article(
+        self,
+        article: dict,
+        summary: str,
+        platform_name: str = "テック",
+        emoji: str = "🌟",
+    ) -> None:
+        """本日の注目記事をDiscordフォーラムスレッドに投稿する"""
         today = datetime.date.today().strftime("%Y-%m-%d")
-        thread_name = f"{today} 本日の注目記事"
+        thread_name = f"{today} {platform_name} 注目記事"
 
-        # スレッド作成メッセージ
         header = (
-            f"🌟 **本日の注目記事** — {today}\n\n"
+            f"{emoji} **{platform_name} 注目記事** — {today}\n\n"
             f"**{article['title']}**\n"
             f"{article['url']}"
         )
         if len(header) > 2000:
             header = header[:1997] + "..."
 
-        # フォーラムへ投稿してスレッドを作成
         try:
             resp = requests.post(
                 f"{self.webhook_url}?wait=true",
@@ -43,7 +47,6 @@ class DiscordMessenger:
             logger.error(f"フォーラムスレッド作成エラー: {e}")
             return
 
-        # 詳細解説をスレッドに投稿
         detail = f"**解説:**\n{summary}"
         if len(detail) > 2000:
             detail = detail[:1997] + "..."
