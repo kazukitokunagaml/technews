@@ -64,5 +64,27 @@ def test_scraping():
     else:
         print("Failed: No Zenn articles found.")
 
+def test_note_scraper_returns_list():
+    """NoteScraper.run() はリストを返す（実HTTPなし）"""
+    from unittest.mock import patch, MagicMock
+    from note_scraper import NoteScraper
+
+    mock_html = """
+    <html><body>
+      <a href="https://note.com/user1/n/abc123">テスト技術記事タイトル</a>
+      <a href="https://note.com/user2/n/def456">プログラミング入門記事</a>
+    </body></html>
+    """
+    mock_resp = MagicMock()
+    mock_resp.content = mock_html.encode("utf-8")
+    mock_resp.raise_for_status = MagicMock()
+
+    with patch("requests.Session.get", return_value=mock_resp):
+        scraper = NoteScraper(top_n=5)
+        articles = scraper.run()
+
+    assert isinstance(articles, list)
+
+
 if __name__ == "__main__":
     test_scraping()
