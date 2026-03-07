@@ -1,5 +1,6 @@
 import datetime
 import logging
+import re
 
 import requests
 from bs4 import BeautifulSoup
@@ -39,7 +40,7 @@ class NoteScraper:
 
         for a_tag in soup.find_all("a", href=True):
             href = a_tag["href"]
-            if "/n/" not in href:
+            if not re.search(r"/[^/]+/n/[a-zA-Z0-9]+", href):
                 continue
             url = href if href.startswith("http") else f"https://note.com{href}"
             if url in seen_urls:
@@ -53,7 +54,7 @@ class NoteScraper:
             articles.append({
                 "title": title,
                 "url": url,
-                "published_date": self.yesterday_str,
+                "published_date": "",
             })
             if len(articles) >= self.top_n:
                 break
