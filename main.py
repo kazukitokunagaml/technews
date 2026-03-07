@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 
 from qiita_scraper import QiitaScraper
 from zenn_scraper import ZennScraper
+from note_scraper import NoteScraper
+from reddit_scraper import RedditScraper
 from send_to_discord import DiscordMessenger
 from summarizer import Summarizer
 
@@ -29,6 +31,10 @@ def fetch_article_text(url: str) -> str:
             content_elem = soup.find("section", class_="it-MdContent")
         elif "zenn.dev" in url:
             content_elem = soup.find("div", class_="znc")
+        elif "note.com" in url:
+            content_elem = soup.find("div", class_="note-common-styles__textnote-body")
+        elif "reddit.com" in url:
+            content_elem = soup.find("div", attrs={"data-testid": "post-rtjson-content"})
         
         if not content_elem:
             content_elem = soup.find("article") or soup.find("main")
@@ -55,31 +61,38 @@ def main():
         logging.error("DISCORD_WEBHOOK_URL または GOOGLE_API_KEY が設定されていません")
         sys.exit(1)
 
-    logging.info("=== 記事取得開始 ===")
-
-    # Qiita & Zenn から記事取得
-    qiita_articles = QiitaScraper(top_n=5).run()
-    zenn_articles = ZennScraper(top_n=5).run()
-    all_articles = qiita_articles + zenn_articles
+    PLATFORMS = [
+        ("Qiita",  "🗾", QiitaScraper(top_n=5),  False),
+        ("Zenn",   "📚", ZennScraper(top_n=5),   False),
+        ("note",   "📝", NoteScraper(top_n=15),  True),
+        ("Reddit", "👽", RedditScraper(subreddit="technology", top_n=10), False),
+    ]
 
     summarizer = Summarizer(google_api_key)
     messenger = DiscordMessenger(webhook_url=webhook_url)
 
-    # 全記事の中から渾身の1本を選定
-    logging.info(f"候補記事 {len(all_articles)} 件から最良の1本を選定中...")
-    best_index = summarizer.select_best(all_articles)
-    best_article = all_articles[best_index]
-    logging.info(f"選定結果: {best_article['title']}")
+    logging.info("=== 記事取得開始 ===")
 
-    # 選定記事の本文を取得して詳細解説を生成
-    text = fetch_article_text(best_article["url"])
-    try:
-        summary = summarizer.summarize(best_article["title"], text or best_article["title"])
-    except Exception as e:
-        logging.warning(f"要約取得失敗 ({best_article['title']}): {e}")
-        summary = "（要約取得失敗）"
+    for platform_name, emoji, scraper, prefer_tech in PLATFORMS:
+        logging.info(f"--- {platform_name} 処理開始 ---")
+        articles = scraper.run()
 
-    messenger.post_best_article(best_article, summary)
+        if not articles:
+            logging.warning(f"{platform_name}: 記事が取得できませんでした。スキップします。")
+            continue
+
+        best_index = summarizer.select_best(articles, prefer_tech=prefer_tech)
+        best_article = articles[best_index]
+        logging.info(f"{platform_name} 選定: {best_article['title']}")
+
+        text = fetch_article_text(best_article["url"])
+        try:
+            summary = summarizer.summarize(best_article["title"], text or best_article["title"])
+        except Exception as e:
+            logging.warning(f"要約取得失敗 ({best_article['title']}): {e}")
+            summary = "（要約取得失敗）"
+
+        messenger.post_best_article(best_article, summary, platform_name, emoji)
 
     logging.info("=== 完了 ===")
 
