@@ -16,8 +16,10 @@ class RedditScraper:
         self.subreddit = subreddit
         self.top_n = top_n
         self.session = requests.Session()
+        # RedditはbotっぽいbotなUser-Agentを403/429でブロックするため、ブラウザ風のUAを使用
         self.session.headers.update({
-            "User-Agent": "TechDigest/1.0 (automated digest bot)"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "application/json, text/javascript, */*; q=0.01",
         })
         today_jst = datetime.datetime.now(self.JST).date()
         self.yesterday_str = (today_jst - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
@@ -32,6 +34,13 @@ class RedditScraper:
         try:
             resp = self.session.get(url, params=params, timeout=30)
             resp.raise_for_status()
+
+            # JSONでない応答（ログインページなど）を検知
+            content_type = resp.headers.get("content-type", "")
+            if "json" not in content_type:
+                logger.error(f"Reddit: 想定外のContent-Type: {content_type}（ブロックされている可能性）")
+                return []
+
             data = resp.json()
 
             articles = []
@@ -55,6 +64,9 @@ class RedditScraper:
             articles.sort(key=lambda x: x["score"], reverse=True)
             logger.info(f"Reddit r/{self.subreddit}: {len(articles)} 件取得")
             return articles
+        except requests.HTTPError as e:
+            logger.error(f"Reddit HTTP error: {e.response.status_code} - アクセス制限の可能性")
+            return []
         except Exception as e:
             logger.error(f"Reddit fetch/parse error: {e}")
             return []

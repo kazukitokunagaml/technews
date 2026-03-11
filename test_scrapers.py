@@ -37,13 +37,14 @@ def test_scraping():
         text = fetch_article_text(article['url'])
         print(f"Extracted text length: {len(text)} characters.")
         if text:
-            print(f"Preview (first 100 chars): {text[:100].replace('\\n', ' ')}...")
+            preview = text[:100].replace('\n', ' ')
+            print(f"Preview (first 100 chars): {preview}...")
     else:
         print("Failed: No Qiita articles found.")
 
     print("\n=== Testing Zenn Scraper (Target: {today_str} or {yesterday_str}) ===")
     zenn = ZennScraper(top_n=1)
-    
+
     zenn_articles = []
     for target_date in [today_str, yesterday_str]:
         print(f"Checking Zenn articles for {target_date}...")
@@ -56,27 +57,30 @@ def test_scraping():
         article = zenn_articles[0]
         print(f"Success: Found {len(zenn_articles)} Zenn articles.")
         print(f"Article: {article['title']} ({article['url']})")
-        
+
         text = fetch_article_text(article['url'])
         print(f"Extracted text length: {len(text)} characters.")
         if text:
-            print(f"Preview (first 100 chars): {text[:100].replace('\\n', ' ')}...")
+            preview = text[:100].replace('\n', ' ')
+            print(f"Preview (first 100 chars): {preview}...")
     else:
         print("Failed: No Zenn articles found.")
 
 def test_note_scraper_returns_list():
-    """NoteScraper.run() はリストを返す（実HTTPなし）"""
+    """NoteScraper.run() はAPIレスポンスからリストを返す（実HTTPなし）"""
     from unittest.mock import patch, MagicMock
     from note_scraper import NoteScraper
 
-    mock_html = """
-    <html><body>
-      <a href="https://note.com/user1/n/abc123">テスト技術記事タイトル</a>
-      <a href="https://note.com/user2/n/def456">プログラミング入門記事</a>
-    </body></html>
-    """
+    mock_data = {
+        "data": {
+            "notes": [
+                {"key": "abc123", "name": "テスト技術記事タイトル", "user": {"urlname": "user1"}},
+                {"key": "def456", "name": "プログラミング入門記事", "user": {"urlname": "user2"}},
+            ]
+        }
+    }
     mock_resp = MagicMock()
-    mock_resp.content = mock_html.encode("utf-8")
+    mock_resp.json.return_value = mock_data
     mock_resp.raise_for_status = MagicMock()
 
     with patch("requests.Session.get", return_value=mock_resp):
@@ -84,6 +88,9 @@ def test_note_scraper_returns_list():
         articles = scraper.run()
 
     assert isinstance(articles, list)
+    assert len(articles) == 2
+    assert articles[0]["title"] == "テスト技術記事タイトル"
+    assert articles[0]["url"] == "https://note.com/user1/n/abc123"
 
 
 def test_reddit_scraper_returns_list():
