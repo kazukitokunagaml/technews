@@ -94,11 +94,17 @@ def test_note_scraper_returns_list():
 
 
 def test_reddit_scraper_returns_list():
-    """RedditScraper.run() はリストを返す（実HTTPなし）"""
+    """RedditScraper.run() はOAuth2トークンを取得してリストを返す（実HTTPなし）"""
     from reddit_scraper import RedditScraper
     from unittest.mock import patch, MagicMock
+    import os
 
-    mock_data = {
+    mock_token_resp = MagicMock()
+    mock_token_resp.json.return_value = {"access_token": "dummy_token", "expires_in": 3600}
+    mock_token_resp.raise_for_status = MagicMock()
+
+    mock_data_resp = MagicMock()
+    mock_data_resp.json.return_value = {
         "data": {
             "children": [
                 {"data": {
@@ -106,18 +112,17 @@ def test_reddit_scraper_returns_list():
                     "url": "https://example.com/article",
                     "permalink": "/r/technology/comments/abc/test/",
                     "score": 1500,
-                    "created_utc": 1741305600,
                 }},
             ]
         }
     }
-    mock_resp = MagicMock()
-    mock_resp.json.return_value = mock_data
-    mock_resp.raise_for_status = MagicMock()
+    mock_data_resp.raise_for_status = MagicMock()
 
-    with patch("requests.Session.get", return_value=mock_resp):
-        scraper = RedditScraper(subreddit="technology", top_n=10)
-        articles = scraper.run()
+    with patch.dict(os.environ, {"REDDIT_CLIENT_ID": "test_id", "REDDIT_CLIENT_SECRET": "test_secret"}):
+        with patch("requests.Session.post", return_value=mock_token_resp):
+            with patch("requests.Session.get", return_value=mock_data_resp):
+                scraper = RedditScraper(subreddit="technology", top_n=10)
+                articles = scraper.run()
 
     assert isinstance(articles, list)
     assert len(articles) == 1
