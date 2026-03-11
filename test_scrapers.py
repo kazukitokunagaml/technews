@@ -143,7 +143,7 @@ def test_select_best_prefer_tech_does_not_crash():
 
 
 def test_discord_thread_name_format():
-    """post_best_article のスレッド名は '{date} {platform_name} 注目記事 #{rank}' 形式"""
+    """post_best_article のスレッド名は '{date} {platform_name} 注目記事' 形式"""
     import datetime
     from unittest.mock import patch, MagicMock
     from send_to_discord import DiscordMessenger
@@ -159,14 +159,13 @@ def test_discord_thread_name_format():
             summary="テスト要約",
             platform_name="Qiita",
             emoji="🗾",
-            rank=1,
         )
 
     # 最初のpost呼び出しでスレッド作成
     call_kwargs = mock_post.call_args_list[0][1]
     thread_name = call_kwargs["json"]["thread_name"]
     today = datetime.date.today().strftime("%Y-%m-%d")
-    assert thread_name == f"{today} Qiita 注目記事 #1"
+    assert thread_name == f"{today} Qiita 注目記事"
     assert "🗾" in call_kwargs["json"]["content"]
 
 
