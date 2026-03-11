@@ -12,16 +12,19 @@ class Summarizer:
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel("gemini-3.1-flash-lite-preview")
 
-    def select_best(self, articles: list[dict], prefer_tech: bool = False) -> int:
-        """記事リストから最も価値のある1記事のインデックスを返す"""
+    def select_best(
+        self, articles: list[dict], prefer_tech: bool = False, top_n: int = 3
+    ) -> list[int]:
+        """記事リストから価値のある上位top_n記事のインデックスリストを返す"""
         if not articles:
-            return 0
+            return [0]
+        actual_n = min(top_n, len(articles))
         articles_text = "\n".join(
             f"{i+1}. {a['title']}" for i, a in enumerate(articles)
         )
         tech_hint = "\n- 技術・プログラミング・AI・開発関連の記事を最優先する" if prefer_tech else ""
         prompt = f"""
-以下の記事リストから、最も技術的に価値があり、読者にとって有益な記事を1つ選んでください。
+以下の記事リストから、最も技術的に価値があり、読者にとって有益な記事を上位{actual_n}つ選んでください。
 選定基準:
 - 技術的な新規性・革新性
 - 実用性の高さ
@@ -31,16 +34,17 @@ class Summarizer:
 記事リスト:
 {articles_text}
 
-最も優れた記事の番号（数字のみ）を返してください。他の文字は一切含めないでください。
+上位{actual_n}記事の番号をカンマ区切り（例: 2,5,1）で返してください。他の文字は一切含めないでください。
 """
         try:
             response = self.model.generate_content(prompt)
-            index = int(response.text.strip()) - 1
-            if 0 <= index < len(articles):
-                return index
+            indices = [int(x.strip()) - 1 for x in response.text.strip().split(",")]
+            valid = [i for i in indices if 0 <= i < len(articles)]
+            if valid:
+                return valid[:actual_n]
         except Exception as e:
             logger.error(f"記事選定エラー: {e}")
-        return 0
+        return list(range(actual_n))
 
     def summarize(self, title: str, content: str) -> str:
         """記事の内容をアニメの次回予告風ティーザーとして生成する"""

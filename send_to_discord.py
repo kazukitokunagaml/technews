@@ -1,3 +1,4 @@
+import datetime
 import logging
 
 import requests
@@ -9,14 +10,22 @@ class DiscordMessenger:
     def __init__(self, webhook_url: str):
         self.webhook_url = webhook_url
 
-    def post_best_article(self, article: dict, summary: str) -> None:
-        """本日の渾身の1記事をDiscordフォーラムスレッドに投稿する"""
-        thread_name = article["title"]
+    def post_best_article(
+        self,
+        article: dict,
+        summary: str,
+        platform_name: str = "",
+        emoji: str = "",
+        rank: int = 1,
+    ) -> None:
+        """記事をDiscordフォーラムスレッドに投稿する"""
+        today = datetime.date.today().strftime("%Y-%m-%d")
+        thread_name = f"{today} {platform_name} 注目記事 #{rank}"
         if len(thread_name) > 100:
             thread_name = thread_name[:97] + "..."
 
         # ティーザー + URL をひとつのメッセージにまとめる
-        content = f"{summary}\n{article['url']}"
+        content = f"{emoji} {summary}\n{article['url']}"
         if len(content) > 2000:
             content = content[:1997] + "..."
         try:

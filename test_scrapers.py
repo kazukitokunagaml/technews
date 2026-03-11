@@ -124,25 +124,26 @@ def test_select_best_prefer_tech_does_not_crash():
 
     mock_model = MagicMock()
     mock_response = MagicMock()
-    mock_response.text = "1"
+    mock_response.text = "1,2"
     mock_model.generate_content.return_value = mock_response
 
     with patch("google.generativeai.GenerativeModel", return_value=mock_model):
         with patch("google.generativeai.configure"):
             s = Summarizer(api_key="dummy")
             s.model = mock_model
-            articles = [{"title": "テスト技術記事"}, {"title": "料理レシピ"}]
-            result = s.select_best(articles, prefer_tech=True)
+            articles = [{"title": "テスト技術記事"}, {"title": "料理レシピ"}, {"title": "AIニュース"}]
+            result = s.select_best(articles, prefer_tech=True, top_n=3)
 
-    assert isinstance(result, int)
-    assert 0 <= result < len(articles)
+    assert isinstance(result, list)
+    assert all(isinstance(i, int) for i in result)
+    assert all(0 <= i < len(articles) for i in result)
     # prefer_tech=True のとき技術優先プロンプトが含まれる
     prompt_used = mock_model.generate_content.call_args[0][0]
     assert "技術・プログラミング" in prompt_used
 
 
 def test_discord_thread_name_format():
-    """post_best_article のスレッド名は '{date} {platform_name} 注目記事' 形式"""
+    """post_best_article のスレッド名は '{date} {platform_name} 注目記事 #{rank}' 形式"""
     import datetime
     from unittest.mock import patch, MagicMock
     from send_to_discord import DiscordMessenger
@@ -158,13 +159,14 @@ def test_discord_thread_name_format():
             summary="テスト要約",
             platform_name="Qiita",
             emoji="🗾",
+            rank=1,
         )
 
     # 最初のpost呼び出しでスレッド作成
     call_kwargs = mock_post.call_args_list[0][1]
     thread_name = call_kwargs["json"]["thread_name"]
     today = datetime.date.today().strftime("%Y-%m-%d")
-    assert thread_name == f"{today} Qiita 注目記事"
+    assert thread_name == f"{today} Qiita 注目記事 #1"
     assert "🗾" in call_kwargs["json"]["content"]
 
 
