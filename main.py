@@ -8,7 +8,6 @@ from dotenv import load_dotenv
 from qiita_scraper import QiitaScraper
 from zenn_scraper import ZennScraper
 from note_scraper import NoteScraper
-from reddit_scraper import RedditScraper
 from send_to_discord import DiscordMessenger
 from summarizer import Summarizer
 
@@ -33,9 +32,6 @@ def fetch_article_text(url: str) -> str:
             content_elem = soup.find("div", class_="znc")
         elif "note.com" in url:
             content_elem = soup.find("div", class_="note-common-styles__textnote-body")
-        elif "reddit.com" in url:
-            content_elem = soup.find("div", attrs={"data-testid": "post-rtjson-content"})
-        
         if not content_elem:
             content_elem = soup.find("article") or soup.find("main")
             
@@ -65,7 +61,6 @@ def main():
         ("Qiita",  "🗾", QiitaScraper(top_n=5),  False),
         ("Zenn",   "📚", ZennScraper(top_n=5),   False),
         ("note",   "📝", NoteScraper(top_n=5),   True),
-        ("Reddit", "👽", RedditScraper(subreddit="technology", top_n=5), False),
     ]
 
     summarizer = Summarizer(google_api_key)

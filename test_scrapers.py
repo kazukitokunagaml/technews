@@ -93,42 +93,6 @@ def test_note_scraper_returns_list():
     assert articles[0]["url"] == "https://note.com/user1/n/abc123"
 
 
-def test_reddit_scraper_returns_list():
-    """RedditScraper.run() はOAuth2トークンを取得してリストを返す（実HTTPなし）"""
-    from reddit_scraper import RedditScraper
-    from unittest.mock import patch, MagicMock
-    import os
-
-    mock_token_resp = MagicMock()
-    mock_token_resp.json.return_value = {"access_token": "dummy_token", "expires_in": 3600}
-    mock_token_resp.raise_for_status = MagicMock()
-
-    mock_data_resp = MagicMock()
-    mock_data_resp.json.return_value = {
-        "data": {
-            "children": [
-                {"data": {
-                    "title": "Test Tech Article",
-                    "url": "https://example.com/article",
-                    "permalink": "/r/technology/comments/abc/test/",
-                    "score": 1500,
-                }},
-            ]
-        }
-    }
-    mock_data_resp.raise_for_status = MagicMock()
-
-    with patch.dict(os.environ, {"REDDIT_CLIENT_ID": "test_id", "REDDIT_CLIENT_SECRET": "test_secret"}):
-        with patch("requests.Session.post", return_value=mock_token_resp):
-            with patch("requests.Session.get", return_value=mock_data_resp):
-                scraper = RedditScraper(subreddit="technology", top_n=10)
-                articles = scraper.run()
-
-    assert isinstance(articles, list)
-    assert len(articles) == 1
-    assert articles[0]["title"] == "Test Tech Article"
-
-
 def test_select_best_prefer_tech_does_not_crash():
     """select_best(prefer_tech=True) はクラッシュしない"""
     from unittest.mock import MagicMock, patch
