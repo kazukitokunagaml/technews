@@ -1,59 +1,65 @@
 import logging
-import re
 
 import requests
-from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
 
 class NoteScraper:
-    """note.comのトレンドから記事候補を取得するスクレイパー"""
+    """note.com の検索APIを使ってテック系人気記事を取得するスクレイパー"""
 
-    TRENDING_URL = "https://note.com/trending"
+    SEARCH_API = "https://note.com/api/v3/searches"
+    KEYWORDS = ["AI", "プログラミング", "エンジニア", "Python", "クラウド"]
 
     def __init__(self, top_n=15):
         self.top_n = top_n
         self.session = requests.Session()
         self.session.headers.update({
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "application/json",
         })
-        logger.info("note スクレイパー初期化完了")
 
     def run(self) -> list[dict]:
-        """トレンドページから記事候補を取得する"""
-        logger.info(f"note: トレンドページから記事取得中... {self.TRENDING_URL}")
-        try:
-            resp = self.session.get(self.TRENDING_URL, timeout=30)
-            resp.raise_for_status()
-        except Exception as e:
-            logger.error(f"note fetch error: {e}")
-            return []
+        """複数キーワードで検索し、いいね数上位の記事候補を返す"""
+        logger.info("note: APIで記事取得中...")
+        seen_keys: set = set()
+        candidates: list[dict] = []
 
-        soup = BeautifulSoup(resp.content, "html.parser")
-        articles = []
-        seen_urls: set = set()
-
-        for a_tag in soup.find_all("a", href=True):
-            href = a_tag["href"]
-            if not re.search(r"/[^/]+/n/[a-zA-Z0-9]+", href):
-                continue
-            url = href if href.startswith("http") else f"https://note.com{href}"
-            if url in seen_urls:
-                continue
-            seen_urls.add(url)
-
-            title = a_tag.get_text(strip=True)
-            if not title or len(title) < 5:
+        for kw in self.KEYWORDS:
+            try:
+                resp = self.session.get(
+                    self.SEARCH_API,
+                    params={"context": "note", "q": kw, "sort": "like", "page": 1},
+                    timeout=15,
+                )
+                resp.raise_for_status()
+            except Exception as e:
+                logger.warning(f"note API error (q={kw}): {e}")
                 continue
 
-            articles.append({
-                "title": title,
-                "url": url,
-                "published_date": "",
-            })
-            if len(articles) >= self.top_n:
-                break
+            notes = resp.json().get("data", {}).get("notes", {}).get("contents", [])
+            for note in notes:
+                key = note.get("key", "")
+                if not key or key in seen_keys:
+                    continue
+                seen_keys.add(key)
 
+                user = note.get("user", {})
+                urlname = user.get("urlname", "")
+                url = f"https://note.com/{urlname}/n/{key}"
+                title = note.get("name", "").strip()
+                if not title or len(title) < 5:
+                    continue
+
+                candidates.append({
+                    "title": title,
+                    "url": url,
+                    "published_date": note.get("publish_at", ""),
+                    "like_count": note.get("like_count", 0),
+                })
+
+        # いいね数でソートして上位 top_n を返す
+        candidates.sort(key=lambda x: x["like_count"], reverse=True)
+        articles = candidates[: self.top_n]
         logger.info(f"note: {len(articles)} 件の記事候補を取得")
         return articles
