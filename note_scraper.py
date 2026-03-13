@@ -45,38 +45,19 @@ class NoteScraper:
                 if not key or key in seen_keys:
                     continue
                 seen_keys.add(key)
-        """トレンドAPIから記事候補を取得する"""
-        logger.info(f"note: APIから記事取得中... {self.API_URL}")
-        try:
-            resp = self.session.get(self.API_URL, timeout=30)
-            resp.raise_for_status()
-            data = resp.json()
-        except Exception as e:
-            logger.error(f"note fetch/parse error: {e}")
-            return []
 
-        notes = data.get("data", {}).get("notes", [])
-        articles = []
+                user = note.get("user", {})
+                urlname = user.get("urlname", "")
+                title = note.get("name", "").strip()
+                if not title or len(title) < 5:
+                    continue
 
-        for note in notes:
-            key = note.get("key", "")
-            user = note.get("user", {})
-            urlname = user.get("urlname", "")
-            title = note.get("name", "").strip()
-
-            if not key or not urlname or not title:
-                continue
-
-            url = f"https://note.com/{urlname}/n/{key}"
-            articles.append(
-                {
+                candidates.append({
                     "title": title,
-                    "url": url,
-                    "published_date": "",
-                }
-            )
-            if len(articles) >= self.top_n:
-                break
+                    "url": f"https://note.com/{urlname}/n/{key}",
+                    "published_date": note.get("publish_at", ""),
+                    "like_count": note.get("like_count", 0),
+                })
 
         # いいね数でソートして上位 top_n を返す
         candidates.sort(key=lambda x: x["like_count"], reverse=True)
