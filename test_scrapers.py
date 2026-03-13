@@ -37,13 +37,14 @@ def test_scraping():
         text = fetch_article_text(article['url'])
         print(f"Extracted text length: {len(text)} characters.")
         if text:
-            print(f"Preview (first 100 chars): {text[:100].replace('\\n', ' ')}...")
+            preview = text[:100].replace('\n', ' ')
+            print(f"Preview (first 100 chars): {preview}...")
     else:
         print("Failed: No Qiita articles found.")
 
     print("\n=== Testing Zenn Scraper (Target: {today_str} or {yesterday_str}) ===")
     zenn = ZennScraper(top_n=1)
-    
+
     zenn_articles = []
     for target_date in [today_str, yesterday_str]:
         print(f"Checking Zenn articles for {target_date}...")
@@ -56,51 +57,25 @@ def test_scraping():
         article = zenn_articles[0]
         print(f"Success: Found {len(zenn_articles)} Zenn articles.")
         print(f"Article: {article['title']} ({article['url']})")
-        
+
         text = fetch_article_text(article['url'])
         print(f"Extracted text length: {len(text)} characters.")
         if text:
-            print(f"Preview (first 100 chars): {text[:100].replace('\\n', ' ')}...")
+            preview = text[:100].replace('\n', ' ')
+            print(f"Preview (first 100 chars): {preview}...")
     else:
         print("Failed: No Zenn articles found.")
 
 def test_note_scraper_returns_list():
-    """NoteScraper.run() はリストを返す（実HTTPなし）"""
+    """NoteScraper.run() はAPIレスポンスからリストを返す（実HTTPなし）"""
     from unittest.mock import patch, MagicMock
     from note_scraper import NoteScraper
 
-    mock_html = """
-    <html><body>
-      <a href="https://note.com/user1/n/abc123">テスト技術記事タイトル</a>
-      <a href="https://note.com/user2/n/def456">プログラミング入門記事</a>
-    </body></html>
-    """
-    mock_resp = MagicMock()
-    mock_resp.content = mock_html.encode("utf-8")
-    mock_resp.raise_for_status = MagicMock()
-
-    with patch("requests.Session.get", return_value=mock_resp):
-        scraper = NoteScraper(top_n=5)
-        articles = scraper.run()
-
-    assert isinstance(articles, list)
-
-
-def test_reddit_scraper_returns_list():
-    """RedditScraper.run() はリストを返す（実HTTPなし）"""
-    from reddit_scraper import RedditScraper
-    from unittest.mock import patch, MagicMock
-
     mock_data = {
         "data": {
-            "children": [
-                {"data": {
-                    "title": "Test Tech Article",
-                    "url": "https://example.com/article",
-                    "permalink": "/r/technology/comments/abc/test/",
-                    "score": 1500,
-                    "created_utc": 1741305600,
-                }},
+            "notes": [
+                {"key": "abc123", "name": "テスト技術記事タイトル", "user": {"urlname": "user1"}},
+                {"key": "def456", "name": "プログラミング入門記事", "user": {"urlname": "user2"}},
             ]
         }
     }
@@ -109,12 +84,13 @@ def test_reddit_scraper_returns_list():
     mock_resp.raise_for_status = MagicMock()
 
     with patch("requests.Session.get", return_value=mock_resp):
-        scraper = RedditScraper(subreddit="technology", top_n=10)
+        scraper = NoteScraper(top_n=5)
         articles = scraper.run()
 
     assert isinstance(articles, list)
-    assert len(articles) == 1
-    assert articles[0]["title"] == "Test Tech Article"
+    assert len(articles) == 2
+    assert articles[0]["title"] == "テスト技術記事タイトル"
+    assert articles[0]["url"] == "https://note.com/user1/n/abc123"
 
 
 def test_select_best_prefer_tech_does_not_crash():
@@ -143,7 +119,7 @@ def test_select_best_prefer_tech_does_not_crash():
 
 
 def test_discord_thread_name_format():
-    """post_best_article のスレッド名は '{date} {platform_name} 注目記事 #{rank}' 形式"""
+    """post_best_article のスレッド名は '{date} {platform_name} 注目記事' 形式"""
     import datetime
     from unittest.mock import patch, MagicMock
     from send_to_discord import DiscordMessenger
@@ -159,14 +135,13 @@ def test_discord_thread_name_format():
             summary="テスト要約",
             platform_name="Qiita",
             emoji="🗾",
-            rank=1,
         )
 
     # 最初のpost呼び出しでスレッド作成
     call_kwargs = mock_post.call_args_list[0][1]
     thread_name = call_kwargs["json"]["thread_name"]
     today = datetime.date.today().strftime("%Y-%m-%d")
-    assert thread_name == f"{today} Qiita 注目記事 #1"
+    assert thread_name == f"{today} Qiita 注目記事"
     assert "🗾" in call_kwargs["json"]["content"]
 
 

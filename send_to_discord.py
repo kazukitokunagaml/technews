@@ -16,11 +16,10 @@ class DiscordMessenger:
         summary: str,
         platform_name: str = "",
         emoji: str = "",
-        rank: int = 1,
     ) -> None:
         """記事をDiscordフォーラムスレッドに投稿する"""
         today = datetime.date.today().strftime("%Y-%m-%d")
-        thread_name = f"{today} {platform_name} 注目記事 #{rank}"
+        thread_name = f"{today} {platform_name} 注目記事"
         if len(thread_name) > 100:
             thread_name = thread_name[:97] + "..."
 
@@ -44,17 +43,3 @@ class DiscordMessenger:
             logger.info(f"フォーラムスレッド作成: {thread_name} (id={thread_id})")
         except Exception as e:
             logger.error(f"フォーラムスレッド作成エラー: {e}")
-            return
-
-        detail = f"**解説:**\n{summary}"
-        if len(detail) > 2000:
-            detail = detail[:1997] + "..."
-        try:
-            requests.post(
-                f"{self.webhook_url}?thread_id={thread_id}",
-                json={"content": detail},
-                timeout=10,
-            ).raise_for_status()
-            logger.info(f"解説投稿完了: {article['title']}")
-        except Exception as e:
-            logger.error(f"解説投稿エラー: {e}")

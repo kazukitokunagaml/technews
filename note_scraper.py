@@ -14,10 +14,12 @@ class NoteScraper:
     def __init__(self, top_n=15):
         self.top_n = top_n
         self.session = requests.Session()
-        self.session.headers.update({
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Accept": "application/json",
-        })
+        self.session.headers.update(
+            {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "application/json",
+            }
+        )
 
     def run(self) -> list[dict]:
         """複数キーワードで検索し、いいね数上位の記事候補を返す"""
@@ -43,20 +45,38 @@ class NoteScraper:
                 if not key or key in seen_keys:
                     continue
                 seen_keys.add(key)
+        """トレンドAPIから記事候補を取得する"""
+        logger.info(f"note: APIから記事取得中... {self.API_URL}")
+        try:
+            resp = self.session.get(self.API_URL, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as e:
+            logger.error(f"note fetch/parse error: {e}")
+            return []
 
-                user = note.get("user", {})
-                urlname = user.get("urlname", "")
-                url = f"https://note.com/{urlname}/n/{key}"
-                title = note.get("name", "").strip()
-                if not title or len(title) < 5:
-                    continue
+        notes = data.get("data", {}).get("notes", [])
+        articles = []
 
-                candidates.append({
+        for note in notes:
+            key = note.get("key", "")
+            user = note.get("user", {})
+            urlname = user.get("urlname", "")
+            title = note.get("name", "").strip()
+
+            if not key or not urlname or not title:
+                continue
+
+            url = f"https://note.com/{urlname}/n/{key}"
+            articles.append(
+                {
                     "title": title,
                     "url": url,
-                    "published_date": note.get("publish_at", ""),
-                    "like_count": note.get("like_count", 0),
-                })
+                    "published_date": "",
+                }
+            )
+            if len(articles) >= self.top_n:
+                break
 
         # いいね数でソートして上位 top_n を返す
         candidates.sort(key=lambda x: x["like_count"], reverse=True)

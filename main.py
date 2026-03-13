@@ -8,7 +8,6 @@ from dotenv import load_dotenv
 from qiita_scraper import QiitaScraper
 from zenn_scraper import ZennScraper
 from note_scraper import NoteScraper
-from reddit_scraper import RedditScraper
 from send_to_discord import DiscordMessenger
 from summarizer import Summarizer
 
@@ -33,9 +32,6 @@ def fetch_article_text(url: str) -> str:
             content_elem = soup.find("div", class_="znc")
         elif "note.com" in url:
             content_elem = soup.find("div", class_="note-common-styles__textnote-body")
-        elif "reddit.com" in url:
-            content_elem = soup.find("div", attrs={"data-testid": "post-rtjson-content"})
-        
         if not content_elem:
             content_elem = soup.find("article") or soup.find("main")
             
@@ -64,8 +60,7 @@ def main():
     PLATFORMS = [
         ("Qiita",  "🗾", QiitaScraper(top_n=5),  False),
         ("Zenn",   "📚", ZennScraper(top_n=5),   False),
-        ("note",   "📝", NoteScraper(top_n=15),  True),
-        ("Reddit", "👽", RedditScraper(subreddit="technology", top_n=10), False),
+        ("note",   "📝", NoteScraper(top_n=5),   True),
     ]
 
     summarizer = Summarizer(google_api_key)
@@ -81,19 +76,18 @@ def main():
             logging.warning(f"{platform_name}: 記事が取得できませんでした。スキップします。")
             continue
 
-        best_indices = summarizer.select_best(articles, prefer_tech=prefer_tech, top_n=3)
-        for rank, best_index in enumerate(best_indices, start=1):
-            best_article = articles[best_index]
-            logging.info(f"{platform_name} 選定({rank}/{len(best_indices)}): {best_article['title']}")
+        best_indices = summarizer.select_best(articles, prefer_tech=prefer_tech, top_n=1)
+        best_article = articles[best_indices[0]]
+        logging.info(f"{platform_name} 選定: {best_article['title']}")
 
-            text = fetch_article_text(best_article["url"])
-            try:
-                summary = summarizer.summarize(best_article["title"], text or best_article["title"])
-            except Exception as e:
-                logging.warning(f"要約取得失敗 ({best_article['title']}): {e}")
-                summary = "（要約取得失敗）"
+        text = fetch_article_text(best_article["url"])
+        try:
+            summary = summarizer.summarize(best_article["title"], text or best_article["title"])
+        except Exception as e:
+            logging.warning(f"要約取得失敗 ({best_article['title']}): {e}")
+            summary = "（要約取得失敗）"
 
-            messenger.post_best_article(best_article, summary, platform_name, emoji, rank=rank)
+        messenger.post_best_article(best_article, summary, platform_name, emoji)
 
     logging.info("=== 完了 ===")
 
