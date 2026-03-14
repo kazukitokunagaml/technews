@@ -73,12 +73,10 @@ def test_note_scraper_returns_list():
 
     mock_data = {
         "data": {
-            "notes": {
-                "contents": [
-                    {"key": "abc123", "name": "テスト技術記事タイトル", "user": {"urlname": "user1"}, "like_count": 100, "publish_at": ""},
-                    {"key": "def456", "name": "プログラミング入門記事", "user": {"urlname": "user2"}, "like_count": 50, "publish_at": ""},
-                ]
-            }
+            "notes": [
+                {"key": "abc123", "name": "テスト技術記事タイトル", "user": {"urlname": "user1"}, "like_count": 100, "publish_at": ""},
+                {"key": "def456", "name": "プログラミング入門記事", "user": {"urlname": "user2"}, "like_count": 50, "publish_at": ""},
+            ]
         }
     }
     mock_resp = MagicMock()

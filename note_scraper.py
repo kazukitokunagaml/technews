@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 class NoteScraper:
     """note.com の検索APIを使ってテック系人気記事を取得するスクレイパー"""
 
-    SEARCH_API = "https://note.com/api/v3/searches"
+    HASHTAG_API = "https://note.com/api/v3/hashtags/{hashtag}/notes"
     KEYWORDS = ["AI", "プログラミング", "エンジニア", "Python", "クラウド"]
 
     def __init__(self, top_n=15):
@@ -30,8 +30,7 @@ class NoteScraper:
         for kw in self.KEYWORDS:
             try:
                 resp = self.session.get(
-                    self.SEARCH_API,
-                    params={"context": "note", "q": kw, "sort": "like", "page": 1},
+                    self.HASHTAG_API.format(hashtag=kw),
                     timeout=15,
                 )
                 resp.raise_for_status()
@@ -39,7 +38,7 @@ class NoteScraper:
                 logger.warning(f"note API error (q={kw}): {e}")
                 continue
 
-            notes = resp.json().get("data", {}).get("notes", {}).get("contents", [])
+            notes = resp.json().get("data", {}).get("notes", [])
             for note in notes:
                 key = note.get("key", "")
                 if not key or key in seen_keys:
