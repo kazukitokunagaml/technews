@@ -58,8 +58,8 @@ def main():
         sys.exit(1)
 
     PLATFORMS = [
-        ("Qiita",  "🗾", QiitaScraper(top_n=5),  False),
-        ("Zenn",   "📚", ZennScraper(top_n=5),   False),
+        ("Qiita",  "🗾", QiitaScraper(top_n=5),  True),
+        ("Zenn",   "📚", ZennScraper(top_n=5),   True),
         ("note",   "📝", NoteScraper(top_n=5),   True),
     ]
 
