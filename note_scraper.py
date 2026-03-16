@@ -9,7 +9,7 @@ class NoteScraper:
     """note.com の検索APIを使ってテック系人気記事を取得するスクレイパー"""
 
     HASHTAG_API = "https://note.com/api/v3/hashtags/{hashtag}/notes"
-    KEYWORDS = ["個人開発", "個人開発者", "副業", "サービス開発", "アプリ開発"]
+    KEYWORDS = ["個人開発", "個人開発者", "副業", "サービス開発", "アプリ開発", "プロダクト開発", "プロダクトマネジメント", "開発プロセス"]
 
     def __init__(self, top_n=15):
         self.top_n = top_n
