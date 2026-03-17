@@ -18,8 +18,10 @@ class DiscordMessenger:
         emoji: str = "",
     ) -> None:
         """記事をDiscordフォーラムスレッドに投稿する"""
-        today = datetime.date.today().strftime("%Y-%m-%d")
-        thread_name = f"{today} {platform_name} 注目記事"
+        thread_name = article.get("title", "")
+        if not thread_name:
+            today = datetime.date.today().strftime("%Y-%m-%d")
+            thread_name = f"{today} {platform_name} 注目記事"
         if len(thread_name) > 100:
             thread_name = thread_name[:97] + "..."
 
