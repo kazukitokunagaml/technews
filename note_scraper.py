@@ -1,3 +1,4 @@
+import datetime
 import logging
 
 import requests
@@ -10,6 +11,7 @@ class NoteScraper:
 
     HASHTAG_API = "https://note.com/api/v3/hashtags/{hashtag}/notes"
     KEYWORDS = ["個人開発", "個人開発者", "副業", "サービス開発", "アプリ開発", "プロダクト開発", "プロダクトマネジメント", "開発プロセス"]
+    JST = datetime.timezone(datetime.timedelta(hours=9))
 
     def __init__(self, top_n=15):
         self.top_n = top_n
@@ -20,9 +22,24 @@ class NoteScraper:
                 "Accept": "application/json",
             }
         )
+        # GitHub Actions (UTC) で実行されるため、JST基準で昨日を計算する
+        today_jst = datetime.datetime.now(self.JST).date()
+        yesterday = today_jst - datetime.timedelta(days=1)
+        self.yesterday_str = yesterday.strftime("%Y-%m-%d")
+        logger.info(f"note 対象日: {self.yesterday_str}")
+
+    def _parse_date_jst(self, publish_at: str) -> str:
+        """publish_atをJST日付文字列(YYYY-MM-DD)に変換する"""
+        if not publish_at:
+            return ""
+        try:
+            dt = datetime.datetime.fromisoformat(publish_at)
+            return dt.astimezone(self.JST).strftime("%Y-%m-%d")
+        except (ValueError, AttributeError):
+            return publish_at.split("T")[0]
 
     def run(self) -> list[dict]:
-        """複数キーワードで検索し、いいね数上位の記事候補を返す"""
+        """複数キーワードで検索し、昨日公開されたいいね数上位の記事候補を返す"""
         logger.info("note: APIで記事取得中...")
         seen_keys: set = set()
         candidates: list[dict] = []
@@ -45,6 +62,10 @@ class NoteScraper:
                     continue
                 seen_keys.add(key)
 
+                published = self._parse_date_jst(note.get("publish_at", ""))
+                if published != self.yesterday_str:
+                    continue
+
                 user = note.get("user", {})
                 urlname = user.get("urlname", "")
                 title = note.get("name", "").strip()
@@ -54,7 +75,7 @@ class NoteScraper:
                 candidates.append({
                     "title": title,
                     "url": f"https://note.com/{urlname}/n/{key}",
-                    "published_date": note.get("publish_at", ""),
+                    "published_date": published,
                     "like_count": note.get("like_count", 0),
                 })
 
