@@ -37,12 +37,11 @@ class TrendsPoster:
         from zenn_scraper import ZennScraper
         from note_scraper import NoteScraper
 
-        # ページ数はdays_backに応じて増やす
-        extra_pages = max(1, days_back // 2)
+        # 上位30件に絞るので各プラットフォームは10件ずつ取れれば十分
         platforms = [
-            ("Qiita", QiitaScraper(top_n=days_back * 5, max_pages=3 + extra_pages, days_back=days_back)),
-            ("Zenn",  ZennScraper(top_n=days_back * 5, max_pages=20 + extra_pages * 5, days_back=days_back)),
-            ("note",  NoteScraper(top_n=days_back * 5, days_back=days_back)),
+            ("Qiita", QiitaScraper(top_n=10, max_pages=3 + days_back // 3, days_back=days_back)),
+            ("Zenn",  ZennScraper(top_n=10, max_pages=20 + days_back, days_back=days_back)),
+            ("note",  NoteScraper(top_n=10, days_back=days_back)),
         ]
 
         all_articles = []
@@ -121,6 +120,10 @@ class TrendsPoster:
         if not articles:
             logger.warning("動向まとめ: 記事が取得できませんでした。スキップします。")
             return
+
+        # いいね数上位30件に絞ってからGeminiへ渡す（入力トークン削減）
+        like_key = lambda a: a.get("like_count") or a.get("liked_count") or a.get("likes_count") or 0
+        articles = sorted(articles, key=like_key, reverse=True)[:30]
 
         logger.info(f"動向まとめ生成中: period={period}, 記事数={len(articles)}")
         summary = self.generate_trend_summary(articles, period)

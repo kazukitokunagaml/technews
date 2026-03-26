@@ -70,10 +70,12 @@ def main():
 
     logging.info("=== 記事取得開始 ===")
 
+    # 各プラットフォームのいいね数1位記事を収集（select_best不要）
+    best_articles = []  # [(article, platform_name, emoji)]
     all_collected_articles = []
 
-    for platform_name, emoji, scraper, prefer_tech in PLATFORMS:
-        logging.info(f"--- {platform_name} 処理開始 ---")
+    for platform_name, emoji, scraper, _ in PLATFORMS:
+        logging.info(f"--- {platform_name} スクレイピング ---")
         articles = scraper.run()
 
         if not articles:
@@ -85,18 +87,20 @@ def main():
             a["platform"] = platform_name
         all_collected_articles.extend(articles)
 
-        best_indices = summarizer.select_best(articles, prefer_tech=prefer_tech, top_n=1)
-        best_article = articles[best_indices[0]]
-        logging.info(f"{platform_name} 選定: {best_article['title']}")
+        # いいね数でソート済みなので先頭が最良
+        best_articles.append((articles[0], platform_name, emoji))
+        logging.info(f"{platform_name} 選定: {articles[0]['title']}")
 
-        text = fetch_article_text(best_article["url"])
-        try:
-            summary = summarizer.summarize(best_article["title"], text or best_article["title"])
-        except Exception as e:
-            logging.warning(f"要約取得失敗 ({best_article['title']}): {e}")
-            summary = "（要約取得失敗）"
+    # 全プラットフォームをまとめて1回のGemini呼び出しで要約
+    logging.info("--- まとめて要約生成 ---")
+    items = [
+        {"title": a["title"], "content": fetch_article_text(a["url"])}
+        for a, _, _ in best_articles
+    ]
+    summaries = summarizer.batch_summarize(items)
 
-        messenger.post_best_article(best_article, summary, platform_name, emoji)
+    for (article, platform_name, emoji), summary in zip(best_articles, summaries):
+        messenger.post_best_article(article, summary, platform_name, emoji)
 
     logging.info("--- 動向まとめ投稿開始 ---")
     trends_poster.post(all_collected_articles)

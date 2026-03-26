@@ -4,6 +4,8 @@ import google.generativeai as genai
 
 logger = logging.getLogger(__name__)
 
+_SEPARATOR = "---"
+
 
 class Summarizer:
     def __init__(self, api_key: str):
@@ -12,70 +14,44 @@ class Summarizer:
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel("gemini-3.1-flash-lite-preview")
 
-    def select_best(
-        self, articles: list[dict], prefer_tech: bool = False, top_n: int = 3
-    ) -> list[int]:
-        """記事リストから価値のある上位top_n記事のインデックスリストを返す"""
-        if not articles:
-            return [0]
-        actual_n = min(top_n, len(articles))
-        articles_text = "\n".join(
-            f"{i+1}. {a['title']}" for i, a in enumerate(articles)
-        )
-        prompt = f"""
-あなたは個人開発に関心を持つエンジニア向けのキュレーターです。
-以下の記事リストから、個人開発者にとって最も価値のある記事を上位{actual_n}つ選んでください。
+    def batch_summarize(self, items: list[dict]) -> list[str]:
+        """複数記事をまとめて1回のGemini呼び出しで要約する。
 
-選定基準（優先度順）:
-- 個人がサービス・アプリ・ツールを作った体験・知見を共有している
-- 個人開発の効率化・自動化・スピードアップに役立つ技術やツールの紹介
-- 個人開発のマネタイズ・リリース・グロースに関する実践的な事例
-- 個人開発者が直面する課題の解決策や tips
-- 個人でも使えるAI・クラウド・OSSの活用事例
-- プロダクト開発の方法論・思想・プロセスを実践者が発信しているもの（スタートアップ・個人・小規模チームの事例が特に望ましい）
+        items: [{"title": str, "content": str}, ...]
+        戻り値: 各記事の要約テキストリスト（itemsと同じ順序）
+        """
+        if not items:
+            return []
 
-除外すべき記事:
-- 大企業の組織論・採用情報・IR関連
-- 学術的すぎて個人開発に応用しにくい内容
-- 技術的な内容を含まない純粋なビジネス・マーケティング記事
+        blocks = []
+        for i, item in enumerate(items):
+            content = item.get("content", "")
+            body = content[:1500] if content else item["title"]
+            blocks.append(f"[記事{i+1}]\nタイトル: {item['title']}\n本文:\n{body}")
 
-記事リスト:
-{articles_text}
-
-上位{actual_n}記事の番号をカンマ区切り（例: 2,5,1）で返してください。他の文字は一切含めないでください。
-"""
-        try:
-            response = self.model.generate_content(prompt)
-            indices = [int(x.strip()) - 1 for x in response.text.strip().split(",")]
-            valid = [i for i in indices if 0 <= i < len(articles)]
-            if valid:
-                return valid[:actual_n]
-        except Exception as e:
-            logger.error(f"記事選定エラー: {e}")
-        return list(range(actual_n))
-
-    def summarize(self, title: str, content: str) -> str:
-        """記事の内容をアニメの次回予告風ティーザーとして生成する"""
-        if not content or len(content) < 100:
-            logger.info(f"Content too short for summarization: {title}")
-            return "（本文が短すぎるため要約をスキップしました）"
+        articles_text = f"\n{_SEPARATOR}\n".join(blocks)
 
         prompt = f"""
-以下の記事を3行でまとめてください。
+以下の{len(items)}本の記事をそれぞれ3行でまとめてください。
 
 条件:
-- 何を作ったか・何を学んだか・どんな方法論を提唱しているかが伝わるようにする（読者が自分に関係あるか判断できるように）
+- 何を作ったか・何を学んだか・どんな方法論を提唱しているかが伝わるようにする
 - 個人開発者やプロダクト開発に携わる人として得られる学びや行動につながる要点を含める
 - アニメの次回予告のようなテンポとリズムで書く
 - 3行、各行30字前後、記号・番号なし
 
-タイトル: {title}
-本文:
-{content[:4000]}
+出力形式: 記事ごとの要約を「{_SEPARATOR}」だけの行で区切って並べる。他の文字は含めない。
+
+{articles_text}
 """
         try:
             response = self.model.generate_content(prompt)
-            return response.text.strip()
+            parts = response.text.strip().split(f"\n{_SEPARATOR}\n")
+            results = [p.strip() for p in parts]
+            # 数が合わない場合は対応する要約を返す（フォールバック）
+            while len(results) < len(items):
+                results.append("（要約取得失敗）")
+            return results[: len(items)]
         except Exception as e:
-            logger.error(f"Gemini Summarization Error: {e}")
-            return "（要約の生成中にエラーが発生しました）"
+            logger.error(f"Gemini batch summarize error: {e}")
+            return ["（要約の生成中にエラーが発生しました）"] * len(items)
