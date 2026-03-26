@@ -45,3 +45,18 @@ class DiscordMessenger:
             logger.info(f"フォーラムスレッド作成: {thread_name} (id={thread_id})")
         except Exception as e:
             logger.error(f"フォーラムスレッド作成エラー: {e}")
+
+    def post_error_notification(self, message: str) -> None:
+        """エラー通知をDiscordフォーラムスレッドに投稿する"""
+        date_str = datetime.date.today().strftime("%Y-%m-%d")
+        thread_name = f"⚠️ {date_str} エラー通知"
+        try:
+            resp = requests.post(
+                f"{self.webhook_url}?wait=true",
+                json={"content": message, "thread_name": thread_name},
+                timeout=10,
+            )
+            resp.raise_for_status()
+            logger.info(f"エラー通知を投稿しました: {thread_name}")
+        except Exception as e:
+            logger.error(f"エラー通知投稿失敗: {e}")

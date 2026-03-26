@@ -12,7 +12,7 @@ class ZennScraper:
     BASE_URL = "https://zenn.dev/api/articles"
     JST = datetime.timezone(datetime.timedelta(hours=9))
 
-    def __init__(self, top_n=5, max_pages=20, days_back: int = 1):
+    def __init__(self, top_n=5, max_pages=20, days_back: int = 1, min_likes: int = 1):
         self.top_n = top_n
         self.max_pages = max_pages
         # GitHub Actions (UTC) で実行されるため、JST基準で昨日を計算する
@@ -23,6 +23,7 @@ class ZennScraper:
         }
         self.cutoff_date = (today_jst - datetime.timedelta(days=days_back + 1)).strftime("%Y-%m-%d")
         self.yesterday_str = (today_jst - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+        self.min_likes = min_likes
         logging.info(f"Zenn 対象期間: {days_back}日分 (max_pages={self.max_pages})")
 
     def _parse_date_jst(self, published_at):
@@ -60,12 +61,13 @@ class ZennScraper:
             for article in articles:
                 published = self._parse_date_jst(article.get("published_at", ""))
                 url = f"https://zenn.dev{article.get('path', '')}"
-                if published in self.target_dates and url not in seen_urls:
+                liked_count = article.get("liked_count", 0) or 0
+                if published in self.target_dates and url not in seen_urls and liked_count >= self.min_likes:
                     seen_urls.add(url)
                     all_articles.append({
                         "title": article.get("title", ""),
                         "url": url,
-                        "liked_count": article.get("liked_count", 0),
+                        "liked_count": liked_count,
                         "published_date": published,
                     })
                 elif published <= self.cutoff_date:

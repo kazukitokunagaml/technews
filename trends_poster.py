@@ -36,12 +36,16 @@ class TrendsPoster:
         from qiita_scraper import QiitaScraper
         from zenn_scraper import ZennScraper
         from note_scraper import NoteScraper
+        from hackernews_scraper import HackerNewsScraper
+        from devto_scraper import DevToScraper
 
         # 上位30件に絞るので各プラットフォームは10件ずつ取れれば十分
         platforms = [
-            ("Qiita", QiitaScraper(top_n=10, max_pages=3 + days_back // 3, days_back=days_back)),
-            ("Zenn",  ZennScraper(top_n=10, max_pages=20 + days_back, days_back=days_back)),
-            ("note",  NoteScraper(top_n=10, days_back=days_back)),
+            ("Qiita",       QiitaScraper(top_n=10, max_pages=3 + days_back // 3, days_back=days_back)),
+            ("Zenn",        ZennScraper(top_n=10, max_pages=20 + days_back, days_back=days_back)),
+            ("note",        NoteScraper(top_n=10, days_back=days_back)),
+            ("Hacker News", HackerNewsScraper(top_n=10, days_back=days_back)),
+            ("dev.to",      DevToScraper(top_n=10, days_back=days_back)),
         ]
 
         all_articles = []

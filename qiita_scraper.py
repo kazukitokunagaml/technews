@@ -20,9 +20,10 @@ class QiitaScraper:
 
     JST = datetime.timezone(datetime.timedelta(hours=9))
 
-    def __init__(self, top_n=5, max_pages=3, days_back: int = 1):
+    def __init__(self, top_n=5, max_pages=3, days_back: int = 1, min_likes: int = 1):
         self.top_n = top_n
         self.max_pages = max_pages
+        self.min_likes = min_likes
         self.session = requests.Session()
         self.session.headers.update({
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
@@ -143,11 +144,15 @@ class QiitaScraper:
             # レート制限対策
             time.sleep(1)
 
-        # 昨日の記事のみフィルタリング（URLで重複排除）
+        # 対象期間・最低いいね数でフィルタリング（URLで重複排除）
         seen_urls: set = set()
         yesterday_articles = []
         for a in all_articles:
-            if a.get("published_date") in self.target_dates and a["url"] not in seen_urls:
+            if (
+                a.get("published_date") in self.target_dates
+                and a["url"] not in seen_urls
+                and a.get("likes_count", 0) >= self.min_likes
+            ):
                 seen_urls.add(a["url"])
                 yesterday_articles.append(a)
         logging.info(f"Qiita: {len(all_articles)}件中、昨日の記事は{len(yesterday_articles)}件")
