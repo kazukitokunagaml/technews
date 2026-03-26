@@ -12,14 +12,19 @@ class ZennScraper:
     BASE_URL = "https://zenn.dev/api/articles"
     JST = datetime.timezone(datetime.timedelta(hours=9))
 
-    def __init__(self, top_n=5, max_pages=20):
+    def __init__(self, top_n=5, max_pages=20, days_back: int = 1, min_likes: int = 1):
         self.top_n = top_n
         self.max_pages = max_pages
         # GitHub Actions (UTC) で実行されるため、JST基準で昨日を計算する
         today_jst = datetime.datetime.now(self.JST).date()
-        yesterday = today_jst - datetime.timedelta(days=1)
-        self.yesterday_str = yesterday.strftime("%Y-%m-%d")
-        logging.info(f"Zenn 対象日: {self.yesterday_str} (max_pages={self.max_pages})")
+        self.target_dates = {
+            (today_jst - datetime.timedelta(days=i)).strftime("%Y-%m-%d")
+            for i in range(1, days_back + 1)
+        }
+        self.cutoff_date = (today_jst - datetime.timedelta(days=days_back + 1)).strftime("%Y-%m-%d")
+        self.yesterday_str = (today_jst - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+        self.min_likes = min_likes
+        logging.info(f"Zenn 対象期間: {days_back}日分 (max_pages={self.max_pages})")
 
     def _parse_date_jst(self, published_at):
         """published_atをJST日付文字列(YYYY-MM-DD)に変換する"""
@@ -56,15 +61,16 @@ class ZennScraper:
             for article in articles:
                 published = self._parse_date_jst(article.get("published_at", ""))
                 url = f"https://zenn.dev{article.get('path', '')}"
-                if published == self.yesterday_str and url not in seen_urls:
+                liked_count = article.get("liked_count", 0) or 0
+                if published in self.target_dates and url not in seen_urls and liked_count >= self.min_likes:
                     seen_urls.add(url)
                     all_articles.append({
                         "title": article.get("title", ""),
                         "url": url,
-                        "liked_count": article.get("liked_count", 0),
+                        "liked_count": liked_count,
                         "published_date": published,
                     })
-                elif published < self.yesterday_str:
+                elif published <= self.cutoff_date:
                     found_older = True
 
             logging.info(f"Zenn Page {page} 完了 ({len(articles)}件取得)")
