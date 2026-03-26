@@ -18,7 +18,9 @@ class QiitaScraper:
 
     BASE_URL = "https://qiita.com"
 
-    def __init__(self, top_n=5, max_pages=3):
+    JST = datetime.timezone(datetime.timedelta(hours=9))
+
+    def __init__(self, top_n=5, max_pages=3, days_back: int = 1):
         self.top_n = top_n
         self.max_pages = max_pages
         self.session = requests.Session()
@@ -26,9 +28,13 @@ class QiitaScraper:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         })
 
-        yesterday = datetime.date.today() - datetime.timedelta(days=1)
-        self.yesterday_str = yesterday.strftime("%Y-%m-%d")
-        logging.info(f"Qiita 対象日: {self.yesterday_str}")
+        today_jst = datetime.datetime.now(self.JST).date()
+        self.target_dates = {
+            (today_jst - datetime.timedelta(days=i)).strftime("%Y-%m-%d")
+            for i in range(1, days_back + 1)
+        }
+        self.yesterday_str = (today_jst - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+        logging.info(f"Qiita 対象期間: {days_back}日分")
 
     def fetch_articles(self, page=1):
         """Qiitaの記事一覧ページから記事情報を取得"""
@@ -141,7 +147,7 @@ class QiitaScraper:
         seen_urls: set = set()
         yesterday_articles = []
         for a in all_articles:
-            if a.get("published_date") == self.yesterday_str and a["url"] not in seen_urls:
+            if a.get("published_date") in self.target_dates and a["url"] not in seen_urls:
                 seen_urls.add(a["url"])
                 yesterday_articles.append(a)
         logging.info(f"Qiita: {len(all_articles)}件中、昨日の記事は{len(yesterday_articles)}件")

@@ -10,6 +10,7 @@ from zenn_scraper import ZennScraper
 from note_scraper import NoteScraper
 from send_to_discord import DiscordMessenger
 from summarizer import Summarizer
+from trends_poster import TrendsPoster
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -65,8 +66,11 @@ def main():
 
     summarizer = Summarizer(google_api_key)
     messenger = DiscordMessenger(webhook_url=webhook_url)
+    trends_poster = TrendsPoster(google_api_key=google_api_key, webhook_url=webhook_url)
 
     logging.info("=== 記事取得開始 ===")
+
+    all_collected_articles = []
 
     for platform_name, emoji, scraper, prefer_tech in PLATFORMS:
         logging.info(f"--- {platform_name} 処理開始 ---")
@@ -75,6 +79,11 @@ def main():
         if not articles:
             logging.warning(f"{platform_name}: 記事が取得できませんでした。スキップします。")
             continue
+
+        # 動向まとめ用に全記事を蓄積（platformフィールドを付与）
+        for a in articles:
+            a["platform"] = platform_name
+        all_collected_articles.extend(articles)
 
         best_indices = summarizer.select_best(articles, prefer_tech=prefer_tech, top_n=1)
         best_article = articles[best_indices[0]]
@@ -88,6 +97,9 @@ def main():
             summary = "（要約取得失敗）"
 
         messenger.post_best_article(best_article, summary, platform_name, emoji)
+
+    logging.info("--- 動向まとめ投稿開始 ---")
+    trends_poster.post(all_collected_articles)
 
     logging.info("=== 完了 ===")
 

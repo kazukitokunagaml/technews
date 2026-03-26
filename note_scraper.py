@@ -13,7 +13,7 @@ class NoteScraper:
     KEYWORDS = ["個人開発", "個人開発者", "副業", "サービス開発", "アプリ開発", "プロダクト開発", "プロダクトマネジメント", "開発プロセス"]
     JST = datetime.timezone(datetime.timedelta(hours=9))
 
-    def __init__(self, top_n=15):
+    def __init__(self, top_n=15, days_back: int = 1):
         self.top_n = top_n
         self.session = requests.Session()
         self.session.headers.update(
@@ -24,9 +24,12 @@ class NoteScraper:
         )
         # GitHub Actions (UTC) で実行されるため、JST基準で昨日を計算する
         today_jst = datetime.datetime.now(self.JST).date()
-        yesterday = today_jst - datetime.timedelta(days=1)
-        self.yesterday_str = yesterday.strftime("%Y-%m-%d")
-        logger.info(f"note 対象日: {self.yesterday_str}")
+        self.target_dates = {
+            (today_jst - datetime.timedelta(days=i)).strftime("%Y-%m-%d")
+            for i in range(1, days_back + 1)
+        }
+        self.yesterday_str = (today_jst - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+        logger.info(f"note 対象期間: {days_back}日分")
 
     def _parse_date_jst(self, publish_at: str) -> str:
         """publish_atをJST日付文字列(YYYY-MM-DD)に変換する"""
@@ -63,7 +66,7 @@ class NoteScraper:
                 seen_keys.add(key)
 
                 published = self._parse_date_jst(note.get("publish_at", ""))
-                if published != self.yesterday_str:
+                if published not in self.target_dates:
                     continue
 
                 user = note.get("user", {})
