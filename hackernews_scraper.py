@@ -1,6 +1,7 @@
 import datetime
 import json
 import logging
+import urllib.parse
 import urllib.request
 
 logger = logging.getLogger(__name__)
@@ -9,7 +10,7 @@ logger = logging.getLogger(__name__)
 class HackerNewsScraper:
     """Algolia HN Search APIを使って昨日のHacker News人気記事を取得する"""
 
-    ALGOLIA_URL = "http://hn.algolia.com/api/v1/search_by_date"
+    ALGOLIA_URL = "https://hn.algolia.com/api/v1/search_by_date"
     JST = datetime.timezone(datetime.timedelta(hours=9))
 
     def __init__(self, top_n=5, min_score=10, days_back: int = 1):
@@ -27,11 +28,12 @@ class HackerNewsScraper:
         logger.info(f"HackerNews 対象期間: {days_back}日分 (min_score={min_score})")
 
     def run(self) -> list[dict]:
-        url = (
-            f"{self.ALGOLIA_URL}?tags=story"
-            f"&numericFilters=created_at_i>{self.created_at_start}"
-            f"&hitsPerPage=100"
-        )
+        params = urllib.parse.urlencode({
+            "tags": "story",
+            "numericFilters": f"created_at_i>{self.created_at_start}",
+            "hitsPerPage": "100",
+        })
+        url = f"{self.ALGOLIA_URL}?{params}"
         logger.info(f"HackerNews Fetching: {url}")
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "TechDigest/1.0"})
