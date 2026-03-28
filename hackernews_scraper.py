@@ -25,12 +25,15 @@ class HackerNewsScraper:
         cutoff_date = today_jst - datetime.timedelta(days=days_back)
         cutoff_dt = datetime.datetime.combine(cutoff_date, datetime.time.min, tzinfo=self.JST)
         self.created_at_start = int(cutoff_dt.timestamp())
+        # 今日の0時(JST)より前の記事のみ取得（当日の記事でhitsPerPageが埋まるのを防ぐ）
+        today_dt = datetime.datetime.combine(today_jst, datetime.time.min, tzinfo=self.JST)
+        self.created_at_end = int(today_dt.timestamp())
         logger.info(f"HackerNews 対象期間: {days_back}日分 (min_score={min_score})")
 
     def run(self) -> list[dict]:
         params = urllib.parse.urlencode({
             "tags": "story",
-            "numericFilters": f"created_at_i>{self.created_at_start}",
+            "numericFilters": f"created_at_i>{self.created_at_start},created_at_i<{self.created_at_end}",
             "hitsPerPage": "100",
         })
         url = f"{self.ALGOLIA_URL}?{params}"
